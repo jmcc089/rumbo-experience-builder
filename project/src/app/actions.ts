@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { createRequest, runRequestPipeline } from "@/lib/booking";
 import type { IntakeInput } from "@/lib/booking";
 import type { ClientPrefs, ExperienceCategory } from "@/lib/types";
@@ -33,11 +34,11 @@ export type SubmitIntakeResult =
  * Persist the client's request (status "building") and fire Email 1.
  * `createRequest` sends the acknowledgment email itself (SBI-08).
  *
- * We then kick off the build pipeline WITHOUT awaiting it, so the client
+ * We then kick off the build pipeline via `after()`, so the client
  * immediately sees the "we're building your experience" state and is
  * re-engaged later by Email 2 (proposals-ready) — the async design in SBI-00.
- * (In production this background step would use `after()` / a queue; here a
- * fire-and-forget promise is sufficient for the demo.)
+ * `after()` keeps the serverless invocation alive until the pipeline settles,
+ * which a bare fire-and-forget promise does not guarantee on Vercel.
  */
 export async function submitIntake(
   payload: IntakePayload
@@ -92,10 +93,12 @@ export async function submitIntake(
   try {
     const { id, token } = await createRequest(intake);
 
-    // Kick off the build in the background; do not block the response.
-    void runRequestPipeline(id).catch((err) => {
-      console.error(`[intake] pipeline failed for request ${id}:`, err);
-    });
+    // Kick off the build after the response is sent, without blocking it.
+    after(() =>
+      runRequestPipeline(id).catch((err) => {
+        console.error(`[intake] pipeline failed for request ${id}:`, err);
+      })
+    );
 
     return { ok: true, token };
   } catch (err) {
