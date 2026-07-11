@@ -22,7 +22,7 @@
 - [x] **SBI-11** · Provider portal `[⚠️ OPUS]`
 - [x] **SBI-12** · Operator dashboard `[⚠️ OPUS]`
 - [x] **SBI-13** · Repair mode + disruption generator `[Sonnet low]`
-- [ ] **SBI-14** · Deploy + docs `[Sonnet low]`
+- [x] **SBI-14** · Deploy + docs `[Sonnet low]`
 
 ---
 
@@ -212,7 +212,18 @@
 - Demo/verification rows created during this SBI's checkpoint were deleted afterward — no leftover repair-demo data in Neon.
 
 ### SBI-14 notes
--
+- **Files created:** `documents/ADR.md`, `documents/README.md`, `documents/SAD.md` (Build-phase documentation base; Assurance expands these).
+- **Fix before deploy:** `project/src/lib/db/pool.ts` and `project/src/lib/email/client.ts` had a Turbopack "whole project traced" build warning from their `fs`/`path`-based `.env.local` fallback loader. Fixed with a `/* turbopackIgnore: true */` comment on the `path.resolve(process.cwd(), file)` call in both files (a runtime `process.env.VERCEL` guard was tried first but doesn't help — Turbopack's tracer is static and doesn't see runtime branches). `npm run build` is now clean with no tracing warning.
+- **Git repo:** initialized at the project root (`rumbo_experience_builder/`, not inside `project/`). Found and removed a stray nested `.git` inside `project/` (leftover from `create-next-app`'s own auto-init during SBI-01, containing only its one boilerplate commit — no real history lost) so `project/` tracks as normal files in the outer repo, not a broken submodule reference. Root `.gitignore` added (`.DS_Store` only — `project/.gitignore` already covers `.env*`/`node_modules`/build output for everything under `project/`).
+- **GitHub:** public repo created and pushed via `gh repo create --source=. --push`: **https://github.com/jmcc089/rumbo-experience-builder**. No secrets committed (verified — `.env*` never staged).
+- **Vercel:** connected to the GitHub repo via the dashboard (Root Directory = `project`), per the operator — order was GitHub-first as required. Auto-deploys on every push to `main`. (Vercel project/team IDs intentionally omitted from this doc since the repo is public.)
+- **Neon:** reused the existing dev DB (from `project/.env.local`) as production, per the operator's choice — no new Neon project created for this SBI.
+- **Env vars set in Vercel:** `DATABASE_URL`, `DEEPSEEK_API_KEY`, `RESEND_API_KEY`, `APP_BASE_URL=https://rumbo-experience-builder.vercel.app`.
+- **Deploy incident (resolved):** first live intake submission failed with `TypeError: Invalid URL` from `pg`'s connection-string parser. Root cause: `DATABASE_URL` had been pasted into Vercel including the `DATABASE_URL=` key and surrounding quotes instead of just the bare value. Fixed by re-entering just the connection-string value and redeploying (a Vercel dashboard action — env-var/secret entry is off-limits for the agent to perform directly). **Operational follow-up (not for this public doc's detail, tracked privately with the operator):** the DB credential should be rotated in the Neon dashboard as a precaution before wide sharing of this deployment.
+- **Live URL:** **https://rumbo-experience-builder.vercel.app**
+- **End-to-end verification passed on the deployed URL** (live browser session, not local): intake submit → status page transitioned `building` → `proposals_ready` (polled automatically) → `/proposals/{token}` showed 3 distinct itineraries ("Colonial & Volcanoes" $541 / "Volcanoes & Colonial" $696 / "Colonial & Adventure" $727), no net price/markup visible → "Book this trip" → booking confirmed, full day-by-day itinerary shown, order materialized → **operator dashboard** (`/operator`) reflected the new order live (Confirmed trips 3, Margin this month $465, request row `paid` $541) → **repair demo** on that same order: "Simulate disruption" → "Disrupted day 1 (reliability 0.80)" → "Repair" → "Repaired day 1 — new total $569.4" (price correctly recomputed, not silently absorbed) → **provider portal** (`/provider`) loads, provider selector works, inbox shows only NET rates (no client price/markup anywhere).
+- **Known non-blocking issue:** transactional email sends fail in production with a `403 validation_error` from Resend — the account is still on Resend's sandbox sender (`onboarding@resend.dev`), which can only send to the account owner's exact email address, not `+alias` variants or other recipients. This was already flagged in SBI-08/14's scope as "swap the Resend sandbox sender for a verified domain before a real demo" — confirmed still open. Does not block the pipeline (emails are fire-and-forget, non-throwing by design) but means no real emails currently arrive; verify via the status/proposals pages directly, or verify a domain in Resend before demoing the email flow specifically.
+- **What remains for Assurance:** full SAD (this SBI only produced a stub), README polish, final verification pass, rotate the Neon password, verify a Resend sending domain, revisit the SBI-09 fire-and-forget pipeline trigger with `after()` for serverless robustness (flagged since SBI-09, still open).
 
 ---
 
