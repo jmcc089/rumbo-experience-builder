@@ -1,0 +1,68 @@
+.header {
+  background: var(--cobalt);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 28px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  color: #fff;
+  font-size: 30px;
+}
+/* On the cobalt header the dot is white too (per brand: all-white on cobalt). */
+.logo :global(.dot) {
+  color: #fff;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.nav a {
+  color: rgba(255, 255, 255, 0.86);
+  transition: color 0.15s ease;
+}
+.nav a:hover {
+  color: #fff;
+}
+
+.signin {
+  padding: 7px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius);
+}
+.signin:hover {
+  border-color: #fff;
+}
+
+@media (max-width: 600px) {
+  .inner {
+    padding: 0 18px;
+    height: 60px;
+  }
+  .nav {
+    gap: 16px;
+    font-size: 13px;
+  }
+  .nav a:not(.signin) {
+    display: none;
+  }
+  .logo {
+    font-size: 26px;
+  }
+}

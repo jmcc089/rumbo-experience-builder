@@ -1,0 +1,437 @@
+.card {
+  background: #fff;
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+/* ---- Progress ---------------------------------------------------- */
+.progress {
+  display: flex;
+  list-style: none;
+  gap: 0;
+  padding: 22px 32px;
+  border-bottom: 1px solid var(--pale-line);
+  background: var(--pale);
+}
+
+.pItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  flex: 1;
+}
+.pItem:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--pale-line);
+  margin: 0 14px;
+}
+
+.pDot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid var(--pale-line);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.p_active .pDot {
+  background: var(--cobalt);
+  border-color: var(--cobalt);
+  color: #fff;
+}
+.p_active .pLabel {
+  color: var(--navy);
+  font-weight: 700;
+}
+.p_done .pDot {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--on-gold);
+}
+.p_done .pLabel {
+  color: var(--navy);
+}
+
+/* ---- Body -------------------------------------------------------- */
+.body {
+  padding: 34px 36px 8px;
+}
+
+.fieldset {
+  border: 0;
+}
+
+.stepTitle {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+}
+
+.stepHint {
+  color: var(--muted);
+  font-size: 15px;
+  margin: 8px 0 26px;
+  max-width: 52ch;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 22px;
+}
+
+.block {
+  margin-bottom: 24px;
+}
+
+.blockLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--navy);
+  margin-bottom: 12px;
+}
+
+.subtle {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---- Fields ------------------------------------------------------ */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  background: var(--offwhite);
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius);
+  color: var(--navy);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.input::placeholder {
+  color: #9aa4b5;
+}
+.input:hover {
+  border-color: #c2cee2;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--cobalt);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(15, 71, 175, 0.1);
+}
+
+.moneyWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.moneyPrefix {
+  position: absolute;
+  left: 14px;
+  color: var(--muted);
+  font-weight: 600;
+  pointer-events: none;
+}
+.moneyInput {
+  padding-left: 28px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--offwhite);
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius);
+  color: var(--navy);
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 128px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.textarea::placeholder {
+  color: #9aa4b5;
+}
+.textarea:focus {
+  outline: none;
+  border-color: var(--cobalt);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(15, 71, 175, 0.1);
+}
+
+/* ---- Chips (interests) ------------------------------------------- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.chip {
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--pale-line);
+  background: var(--offwhite);
+  color: var(--navy);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.chip:hover {
+  border-color: var(--cobalt);
+}
+.chipOn {
+  background: var(--cobalt);
+  border-color: var(--cobalt);
+  color: #fff;
+}
+
+/* ---- Segmented control ------------------------------------------- */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--offwhite);
+}
+.segmentedWrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+.seg {
+  padding: 10px 18px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--pale-line);
+  color: var(--navy);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.seg:last-child {
+  border-right: 0;
+}
+.seg:hover {
+  background: var(--pale);
+}
+.segOn {
+  background: var(--cobalt);
+  color: #fff;
+}
+.segOn:hover {
+  background: var(--cobalt);
+}
+
+/* ---- Stacked options (mornings) ---------------------------------- */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 13px 16px;
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius);
+  background: var(--offwhite);
+  color: var(--navy);
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.option:hover {
+  border-color: var(--cobalt);
+}
+.radioDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #b9c4d8;
+  flex-shrink: 0;
+  transition: all 0.14s ease;
+}
+.optionOn {
+  border-color: var(--cobalt);
+  background: #fff;
+}
+.optionOn .radioDot {
+  border-color: var(--cobalt);
+  border-width: 5px;
+}
+
+/* ---- Errors ------------------------------------------------------ */
+.inlineError,
+.formError {
+  color: #b4442f;
+  font-size: 14px;
+  margin-top: 10px;
+}
+.formError {
+  margin: 4px 0 0;
+}
+
+/* ---- Footer nav -------------------------------------------------- */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 36px 30px;
+}
+
+.btnPrimary {
+  background: var(--gold);
+  color: var(--on-gold);
+  border: 0;
+  padding: 13px 30px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+.btnPrimary:hover:not(:disabled) {
+  background: var(--gold-deep);
+}
+.btnPrimary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btnPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--pale-line);
+  padding: 13px 24px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.btnGhost:hover:not(:disabled) {
+  border-color: var(--cobalt);
+  color: var(--navy);
+}
+
+/* ---- Building state ---------------------------------------------- */
+.building {
+  padding: 60px 44px 64px;
+  text-align: center;
+}
+.buildingMark {
+  font-size: 34px;
+  color: var(--cobalt);
+  margin-bottom: 24px;
+}
+.buildingTitle {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  font-weight: 500;
+  color: var(--navy);
+  margin-bottom: 16px;
+}
+.buildingBody {
+  color: var(--muted);
+  font-size: 16px;
+  max-width: 46ch;
+  margin: 0 auto 12px;
+}
+.buildingBody strong {
+  color: var(--navy);
+}
+.buildingLink {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--cobalt);
+  font-weight: 600;
+  font-size: 14.5px;
+  border-bottom: 1px solid var(--gold);
+  padding-bottom: 1px;
+}
+.buildingLink:hover {
+  color: var(--cobalt-deep);
+}
+.buildingNote {
+  display: inline-block;
+  margin-top: 22px;
+  padding: 10px 18px;
+  border: 1px solid var(--pale-line);
+  border-radius: 999px;
+  font-size: 13.5px;
+  color: var(--navy);
+  background: var(--pale);
+}
+
+/* ---- Responsive -------------------------------------------------- */
+@media (max-width: 640px) {
+  .progress {
+    padding: 18px 18px;
+  }
+  .pLabel {
+    display: none;
+  }
+  .pItem:not(:last-child)::after {
+    margin: 0 8px;
+  }
+  .body {
+    padding: 26px 20px 4px;
+  }
+  .footer {
+    padding: 18px 20px 24px;
+  }
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+  .stepTitle {
+    font-size: 26px;
+  }
+  .segmented {
+    width: 100%;
+  }
+  .seg {
+    flex: 1;
+  }
+  .building {
+    padding: 44px 22px 48px;
+  }
+  .buildingTitle {
+    font-size: 28px;
+  }
+}
