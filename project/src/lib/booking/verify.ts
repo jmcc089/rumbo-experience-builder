@@ -14,6 +14,7 @@ async function main() {
 
   // ── 1. Create request, unique non-guessable token ─────────────────────
   const intake = {
+    name: "Verify SBI07",
     email: "verify-sbi07@example.com",
     arrival_date: "2026-08-10",
     departure_date: "2026-08-13",

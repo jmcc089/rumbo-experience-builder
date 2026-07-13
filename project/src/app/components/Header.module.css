@@ -41,13 +41,17 @@
   color: #fff;
 }
 
-.signin {
-  padding: 7px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+.cta {
+  padding: 8px 18px;
+  background: var(--gold);
+  color: var(--on-gold) !important;
   border-radius: var(--radius);
+  font-weight: 700;
+  transition: background 0.15s ease;
 }
-.signin:hover {
-  border-color: #fff;
+.cta:hover {
+  background: var(--gold-deep);
+  color: var(--on-gold) !important;
 }
 
 @media (max-width: 600px) {
@@ -58,9 +62,6 @@
   .nav {
     gap: 16px;
     font-size: 13px;
-  }
-  .nav a:not(.signin) {
-    display: none;
   }
   .logo {
     font-size: 26px;

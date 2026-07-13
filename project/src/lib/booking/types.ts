@@ -5,6 +5,7 @@ import { OrderProviderInstructions } from "../llm";
 export const HOLD_WINDOW_MINUTES = 15;
 
 export interface IntakeInput {
+  name: string;
   email: string;
   arrival_date: string; // YYYY-MM-DD
   departure_date: string;

@@ -61,6 +61,7 @@ export type RequestStatus = "building" | "proposals_ready" | "paid" | "expired";
 
 export interface RecentRequestRow {
   id: string;
+  name: string;
   email: string;
   arrival_date: string;
   departure_date: string;
@@ -76,7 +77,8 @@ export interface RecentRequestRow {
 export async function getRecentRequests(limit = 12): Promise<RecentRequestRow[]> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT cr.id, cr.email, cr.arrival_date, cr.departure_date, cr.travelers,
+    `SELECT cr.id, cr.email, cr.prefs_json->>'contact_name' AS name,
+            cr.arrival_date, cr.departure_date, cr.travelers,
             cr.status, cr.budget_total, cr.created_at,
             o.client_price
      FROM client_requests cr
@@ -93,6 +95,7 @@ export async function getRecentRequests(limit = 12): Promise<RecentRequestRow[]>
     const paid = r.client_price != null;
     return {
       id: r.id,
+      name: r.name ?? "",
       email: r.email,
       arrival_date: toDateString(r.arrival_date),
       departure_date: toDateString(r.departure_date),

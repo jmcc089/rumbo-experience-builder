@@ -11,6 +11,7 @@ function assert(cond: boolean, msg: string) {
 
 async function makePaidOrder(email: string) {
   const intake = {
+    name: "Repair Verify",
     email,
     arrival_date: "2026-09-10",
     departure_date: "2026-09-13",

@@ -52,7 +52,11 @@ export async function insertClientRequest(intake: IntakeInput): Promise<{ id: st
       intake.departure_time,
       intake.travelers,
       intake.budget_total,
-      JSON.stringify(intake.prefs_json),
+      // The client's name is recorded alongside their preferences. There is no
+      // login in Rumbo, so `contact_name` in prefs_json is the record of who
+      // the request belongs to (kept here to avoid a schema migration; the
+      // engine ignores unknown keys in prefs_json).
+      JSON.stringify({ ...intake.prefs_json, contact_name: intake.name }),
       intake.free_text,
     ]
   );

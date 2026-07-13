@@ -63,6 +63,7 @@ interface FormState {
   group_composition: NonNullable<ClientPrefs["group_composition"]> | "";
   lodging_tier: NonNullable<ClientPrefs["lodging_tier"]> | "";
   free_text: string;
+  name: string;
   email: string;
 }
 
@@ -79,6 +80,7 @@ const EMPTY: FormState = {
   group_composition: "",
   lodging_tier: "",
   free_text: "",
+  name: "",
   email: "",
 };
 
@@ -136,7 +138,7 @@ export default function IntakeForm() {
     [form]
   );
 
-  const step3Valid = isEmail(form.email);
+  const step3Valid = form.name.trim().length > 0 && isEmail(form.email);
 
   async function handleSubmit() {
     setError(null);
@@ -155,6 +157,7 @@ export default function IntakeForm() {
     );
 
     const payload: IntakePayload = {
+      name: form.name.trim(),
       email: form.email.trim(),
       arrival_date: form.arrival_date,
       departure_date: form.departure_date,
@@ -378,20 +381,31 @@ export default function IntakeForm() {
               />
             </div>
 
-            <div className={styles.block}>
+            <div className={styles.grid2}>
+              <Field label="Your name">
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="Jordan Rivera"
+                  autoComplete="name"
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                />
+              </Field>
               <Field label="Email — where we’ll send your itineraries">
                 <input
                   type="email"
                   className={styles.input}
                   placeholder="you@email.com"
+                  autoComplete="email"
                   value={form.email}
                   onChange={(e) => set("email", e.target.value)}
                 />
               </Field>
-              <p className={styles.subtle}>
-                No account, no password. Your itineraries arrive by email.
-              </p>
             </div>
+            <p className={styles.subtle}>
+              No account, no password. Your itineraries arrive by email.
+            </p>
           </fieldset>
         )}
 

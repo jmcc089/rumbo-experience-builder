@@ -11,6 +11,7 @@ import { MAX_TRIP_SPAN_DAYS, tripSpanDays } from "@/lib/config";
  * All hard data stays structured; only `free_text` is LLM-bound downstream.
  */
 export interface IntakePayload {
+  name: string;
   email: string;
   arrival_date: string; // YYYY-MM-DD
   departure_date: string; // YYYY-MM-DD
@@ -48,6 +49,9 @@ export async function submitIntake(
   if (!payload || typeof payload !== "object") {
     return { ok: false, error: "Invalid submission." };
   }
+  if (!payload.name || !payload.name.trim()) {
+    return { ok: false, error: "Your name is required." };
+  }
   if (!isEmail(payload.email)) {
     return { ok: false, error: "A valid email is required." };
   }
@@ -79,6 +83,7 @@ export async function submitIntake(
   };
 
   const intake: IntakeInput = {
+    name: payload.name.trim(),
     email: payload.email.trim(),
     arrival_date: payload.arrival_date,
     departure_date: payload.departure_date,

@@ -100,8 +100,9 @@ export default async function OperatorPage() {
                     {requests.map((r) => (
                       <tr key={r.id}>
                         <td>
-                          <span className={styles.client}>{r.email}</span>
+                          <span className={styles.client}>{r.name || r.email}</span>
                           <span className={styles.travelers}>
+                            {r.name ? `${r.email} · ` : ""}
                             {r.travelers} {r.travelers === 1 ? "traveler" : "travelers"}
                           </span>
                         </td>

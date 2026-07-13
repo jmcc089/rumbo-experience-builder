@@ -219,6 +219,10 @@
   font-size: 26px;
   color: var(--cobalt);
 }
+/* Footer wordmark: the dot matches the name (cobalt), not the gold accent. */
+.footer :global(.rumbo-logo .dot) {
+  color: var(--cobalt);
+}
 .footNote {
   font-size: 13.5px;
   color: var(--muted);
