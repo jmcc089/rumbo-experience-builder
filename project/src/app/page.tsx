@@ -2,15 +2,32 @@ import Header from "./components/Header";
 import IntakeForm from "./components/IntakeForm";
 import styles from "./page.module.css";
 
+// Full-bleed hero photography of El Salvador (public/hero). Different source
+// sizes; the slideshow renders each with `cover`, so they all fill the hero.
+const HERO_IMAGES = [
+  { src: "/hero/hero-1.jpg", alt: "Volcanic rock formations on the Pacific coast at sunset" },
+  { src: "/hero/hero-2.jpg", alt: "The turquoise crater lake of the Santa Ana volcano" },
+  { src: "/hero/hero-3.jpg", alt: "The Izalco volcano rising above forested highlands" },
+  { src: "/hero/hero-4.jpg", alt: "The Metropolitan Cathedral in San Salvador at golden hour" },
+];
+
 export default function Home() {
   return (
     <div id="top">
       <Header />
 
       {/* ---- Hero -------------------------------------------------- */}
-      {/* Intended background: a full-bleed El Salvador photograph.
-          Placeholder for now: a cobalt→navy wash, clearly swappable. */}
-      <section className={styles.hero}>
+      <section className={styles.hero} aria-label="El Salvador">
+        <div className={styles.heroSlides} role="img" aria-label={HERO_IMAGES[0].alt}>
+          {HERO_IMAGES.map((img, i) => (
+            <div
+              key={img.src}
+              className={styles.heroSlide}
+              style={{ backgroundImage: `url(${img.src})`, animationDelay: `${i * 8}s` }}
+            />
+          ))}
+        </div>
+        <div className={styles.heroOverlay} aria-hidden />
         <div className={styles.heroInner}>
           <p className={styles.eyebrow}>Boutique experiences · El Salvador</p>
           <h1 className={styles.heroTitle}>

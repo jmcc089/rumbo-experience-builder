@@ -1,6 +1,7 @@
 /* ---- Hero ---------------------------------------------------------
-   Airline-clean: full-bleed cobalt wash (placeholder for a real ES photo),
-   white serif headline, one gold CTA. Minimal, typography-forward. */
+   Airline-clean: a full-bleed crossfading slideshow of El Salvador
+   photography under a cobalt legibility wash, white serif headline,
+   one gold CTA. Minimal, typography-forward. */
 .hero {
   position: relative;
   min-height: 78vh;
@@ -10,12 +11,59 @@
   color: #fff;
   padding: 80px 28px 96px;
   overflow: hidden;
-  background: radial-gradient(
-      120% 120% at 78% 12%,
-      rgba(224, 164, 74, 0.16) 0%,
-      rgba(224, 164, 74, 0) 46%
+  /* Cobalt fallback shown before/behind the photos. */
+  background: linear-gradient(160deg, var(--cobalt) 0%, var(--cobalt-deep) 58%, #082a6b 100%);
+}
+
+/* Crossfading photo layer. Each slide is full-bleed (cover), so images of
+   different sizes/aspect ratios all fill the hero without distortion. */
+.heroSlides {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.heroSlide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  animation: heroCrossfade 32s linear infinite;
+  will-change: opacity;
+}
+
+/* 4 slides, staggered by 8s (set inline). Each: fade in, hold, fade out. */
+@keyframes heroCrossfade {
+  0% {
+    opacity: 0;
+  }
+  3% {
+    opacity: 1;
+  }
+  22% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Legibility wash: darker toward the left (where the text sits) and the
+   bottom (scroll cue), lighter over the right so the photo reads through. */
+.heroOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+      105deg,
+      rgba(9, 28, 70, 0.82) 0%,
+      rgba(9, 28, 70, 0.5) 46%,
+      rgba(9, 28, 70, 0.22) 100%
     ),
-    linear-gradient(160deg, var(--cobalt) 0%, var(--cobalt-deep) 58%, #082a6b 100%);
+    linear-gradient(180deg, rgba(9, 28, 70, 0.1) 45%, rgba(7, 22, 58, 0.72) 100%);
 }
 
 /* Subtle horizon line — a faint gold hairline, boutique detail. */
@@ -26,6 +74,7 @@
   right: 0;
   bottom: 0;
   height: 3px;
+  z-index: 2;
   background: linear-gradient(
     90deg,
     transparent,
@@ -35,9 +84,21 @@
 }
 
 .heroInner {
+  position: relative;
+  z-index: 2;
   max-width: var(--maxw);
   width: 100%;
   margin: 0 auto;
+}
+
+/* Respect reduced-motion: hold the first photo, no crossfade. */
+@media (prefers-reduced-motion: reduce) {
+  .heroSlide {
+    animation: none;
+  }
+  .heroSlide:first-child {
+    opacity: 1;
+  }
 }
 
 .eyebrow {
@@ -94,6 +155,7 @@
 
 .scrollCue {
   position: absolute;
+  z-index: 2;
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
