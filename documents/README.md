@@ -99,6 +99,8 @@ All four are optional at the code level in the sense that the app fails safe wit
 
 "Rumbo" is used elsewhere in the travel industry; a real launch would require a trademark check. Fine as-is for portfolio scope.
 
-## What's next (Assurance phase)
+## Documentation
 
-This README and the accompanying [ADR.md](ADR.md) and [SAD.md](SAD.md) are the Build-phase documentation base. The Assurance phase (separate from this Build package) will produce the full software architecture document, polish this README, and run a final end-to-end verification pass.
+- **[SAD.md](SAD.md)** — Software Architecture Document: components, data model, the engine, request lifecycle, the markup partition, deployment topology, and known limitations.
+- **[ADR.md](ADR.md)** — the numbered decision records behind each major design choice.
+- `sbi/task_list.md` — the per-SBI build log, deviations, and open issues.
