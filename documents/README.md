@@ -1,5 +1,9 @@
 # Rumbo
 
+**Live demo:** https://rumbo-experience-builder.vercel.app · Internal views: [`/operator`](https://rumbo-experience-builder.vercel.app/operator) · [`/provider`](https://rumbo-experience-builder.vercel.app/provider)
+
+> Portfolio demonstration — no real booking or payment is processed.
+
 **Rumbo** is the internal coordination system of an invented boutique inbound tour operator based in El Salvador, selling multi-day experiences to United States travelers.
 
 A client submits a single request — dates, travelers, budget, and a free-text description of how they picture their trip. Rumbo coordinates with local providers, then builds **3 complete, distinct multi-day itineraries** (activities, local transfers, meals, lodging), each valid against hard constraints and optimized against a weighted scoring model. The client picks one and completes a simulated payment.
@@ -64,6 +68,7 @@ npm run dev                     # http://localhost:3000
 | `DEEPSEEK_API_KEY` | DeepSeek API key (LLM boundary — constraint extraction + personalization) |
 | `RESEND_API_KEY` | Resend API key (transactional email) |
 | `APP_BASE_URL` | Base URL used to build proposal links in emails |
+| `EMAIL_FROM` | _Optional._ Verified Resend sender (e.g. `Rumbo <hola@yourdomain.com>`). Falls back to Resend's sandbox sender if unset. |
 
 All four are optional at the code level in the sense that the app fails safe without them (no email sent, LLM falls back to deterministic defaults) — but `DATABASE_URL` is required for anything to actually run.
 

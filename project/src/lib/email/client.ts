@@ -24,9 +24,17 @@ function loadEnv() {
   if (process.env.VERCEL || process.env.CI) return;
   loadEnvVar("RESEND_API_KEY");
   loadEnvVar("APP_BASE_URL");
+  loadEnvVar("EMAIL_FROM");
 }
 
-const FROM_ADDRESS = "Rumbo <onboarding@resend.dev>";
+// Sandbox sender: can only deliver to the Resend account owner. Once a domain is
+// verified in Resend, set EMAIL_FROM (e.g. "Rumbo <hola@rumbo.example>") — no code change.
+const DEFAULT_FROM_ADDRESS = "Rumbo <onboarding@resend.dev>";
+
+function getFromAddress(): string {
+  loadEnv();
+  return process.env.EMAIL_FROM?.trim() || DEFAULT_FROM_ADDRESS;
+}
 
 let resendClient: Resend | null = null;
 
@@ -60,7 +68,7 @@ export async function sendEmail({ to, subject, html }: SendEmailInput): Promise<
     return;
   }
   try {
-    const { error } = await resend.emails.send({ from: FROM_ADDRESS, to, subject, html });
+    const { error } = await resend.emails.send({ from: getFromAddress(), to, subject, html });
     if (error) console.error(`[email:error] failed to send "${subject}" to ${to}:`, error);
   } catch (err) {
     console.error(`[email:error] failed to send "${subject}" to ${to}:`, err);
