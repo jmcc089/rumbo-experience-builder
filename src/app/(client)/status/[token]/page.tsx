@@ -1,4 +1,4 @@
-import Header from "@/app/components/Header";
+import Header from "../../components/Header";
 import { getRequestStatus } from "@/lib/booking";
 import StatusClient from "./StatusClient";
 

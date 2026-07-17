@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Header from "@/app/components/Header";
+import Header from "../../components/Header";
 import type { EnrichedProposal } from "@/lib/booking";
 import { bookTrip } from "../actions";
 import { CategoryTags, ItineraryTimeline } from "./Itinerary";

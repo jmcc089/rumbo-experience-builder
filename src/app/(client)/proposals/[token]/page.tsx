@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Header from "@/app/components/Header";
+import Header from "../../components/Header";
 import { getProposalsPageView } from "@/lib/booking";
 import ProposalsClient from "./ProposalsClient";
 import Confirmation from "./Confirmation";
