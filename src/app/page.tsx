@@ -2,13 +2,13 @@ import Header from "./components/Header";
 import IntakeForm from "./components/IntakeForm";
 import styles from "./page.module.css";
 
-// Full-bleed hero photography of El Salvador (public/hero). Different source
+// Full-bleed hero photography of El Salvador (public/). Different source
 // sizes; the slideshow renders each with `cover`, so they all fill the hero.
 const HERO_IMAGES = [
-  { src: "/hero/hero-1.jpg", alt: "Volcanic rock formations on the Pacific coast at sunset" },
-  { src: "/hero/hero-2.jpg", alt: "The turquoise crater lake of the Santa Ana volcano" },
-  { src: "/hero/hero-3.jpg", alt: "The Izalco volcano rising above forested highlands" },
-  { src: "/hero/hero-4.jpg", alt: "The Metropolitan Cathedral in San Salvador at golden hour" },
+  { src: "/hero-1.jpg", alt: "Volcanic rock formations on the Pacific coast at sunset" },
+  { src: "/hero-2.jpg", alt: "The turquoise crater lake of the Santa Ana volcano" },
+  { src: "/hero-3.jpg", alt: "The Izalco volcano rising above forested highlands" },
+  { src: "/hero-4.jpg", alt: "The Metropolitan Cathedral in San Salvador at golden hour" },
 ];
 
 export default function Home() {
