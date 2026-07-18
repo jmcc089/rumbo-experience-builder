@@ -12,7 +12,7 @@
  * single option. See task_list.md open issues (SBI-05 distinctness) — a longer
  * cap becomes possible once that is addressed or the catalog grows.
  */
-export const MAX_TRIP_SPAN_DAYS = 5;
+export const MAX_TRIP_SPAN_DAYS = 10;
 
 /** Whole days between two 'YYYY-MM-DD' dates (departure − arrival). */
 export function tripSpanDays(arrival: string, departure: string): number {
