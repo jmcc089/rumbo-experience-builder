@@ -5,9 +5,8 @@
  * Maximum trip length the builder accepts, expressed as the number of days
  * between arrival and departure (`departure_date − arrival_date`).
  *
- * Chosen from the seed-data distinctness sweep (SBI-10): at this span the engine
  * still returns 3 distinct proposals for typical broad-interest requests. Longer
- * trips consume most of the ~24-experience catalog, so any two itineraries
+ * trips consume most of the ~97-experience catalog, so any two itineraries
  * overlap > 60% and the engine's distinctness filter collapses them toward a
  * single option. See task_list.md open issues (SBI-05 distinctness) — a longer
  * cap becomes possible once that is addressed or the catalog grows.
