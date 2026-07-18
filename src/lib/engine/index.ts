@@ -235,12 +235,19 @@ function fillDay(
     // Dependency-constrained start
     if (exp.dependency === "sunrise_only") {
       if (noEarlyMornings) continue;
-      startMin = SUNRISE_START_MIN;
-      if (startMin < arrivalAtExp) continue; // too late for sunrise
+      // Sunrise runs before the normal 08:00 day-start floor, so it is only
+      // valid as the day's first activity and in the base zone (the guest is
+      // still at their lodging at dawn — no intra-day transfer possible).
+      if (result.length > 0 || transferMin > 0) continue;
+      startMin = Math.max(SUNRISE_START_MIN, expOpenFrom);
+      if (startMin > SUNRISE_END_MIN) continue; // opens too late for sunrise
     } else if (exp.dependency === "tide_dependent") {
-      const window = TIDE_WINDOWS.find(([ws]) => ws >= arrivalAtExp);
+      // Pick the earliest tide window we can still start within, honouring both
+      // arrival time and the experience's own opening hour.
+      const earliest = Math.max(arrivalAtExp, expOpenFrom);
+      const window = TIDE_WINDOWS.find(([ws, we]) => Math.max(earliest, ws) <= we);
       if (!window) continue;
-      startMin = Math.max(startMin, window[0]);
+      startMin = Math.max(earliest, window[0]);
     }
 
     const endMin = startMin + exp.duration_min;
@@ -887,7 +894,7 @@ export function checkValidity(
           `Day ${day.day_index}: ${exp.name} starts before no-early-mornings threshold`
         );
       }
-      if (startMin < dayStartMin) {
+      if (startMin < dayStartMin && exp.dependency !== "sunrise_only") {
         violations.push(`Day ${day.day_index}: ${exp.name} starts before day window open`);
       }
       if (endMin > dayEndMin) {
