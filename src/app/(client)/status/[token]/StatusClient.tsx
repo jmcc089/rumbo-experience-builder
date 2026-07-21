@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { pollStatus } from "../../proposals/actions";
+import type { RequestStatus } from "@/lib/types";
 import styles from "./status.module.css";
 
-type Status = "building" | "proposals_ready" | "paid" | "expired" | "not_found";
+type Status = RequestStatus | "not_found";
+
+/** Statuses where the request is still being worked and the page should poll. */
+const WAITING: Status[] = ["building", "awaiting_providers"];
 
 /**
  * Status page. Calm "we're building" state that polls the request status
@@ -23,7 +27,7 @@ export default function StatusClient({
 
   useEffect(() => {
     // Stop polling once there's nothing left to wait for.
-    if (status !== "building") return;
+    if (!WAITING.includes(status)) return;
     const id = setInterval(async () => {
       try {
         const res = await pollStatus(token);
@@ -38,7 +42,7 @@ export default function StatusClient({
   return (
     <main className={styles.main}>
       <section className={styles.panel}>
-        {status === "building" && (
+        {WAITING.includes(status) && (
           <>
             <div className={styles.mark} aria-hidden>
               <span className="rumbo-logo">
@@ -49,7 +53,7 @@ export default function StatusClient({
             <span className={styles.eyebrow}>Building your experience</span>
             <h1 className={styles.title}>We’re shaping your itineraries</h1>
             <p className={styles.body}>
-              Our coordinators are confirming availability with local providers and assembling three
+              We’re contacting local providers to confirm availability and assembling three
               complete itineraries around what you told us. We’ll email you the moment they’re ready —
               usually within a few minutes. You can safely close this page.
             </p>
@@ -90,6 +94,20 @@ export default function StatusClient({
             <h1 className={styles.title}>These options have expired</h1>
             <p className={styles.body}>
               Held itineraries are reserved for 15 minutes. Starting again takes only a moment.
+            </p>
+            <Link href="/" className={styles.cta}>
+              Start a new request
+            </Link>
+          </>
+        )}
+
+        {status === "no_availability" && (
+          <>
+            <span className={styles.eyebrow}>No availability</span>
+            <h1 className={styles.title}>We couldn’t assemble a trip this time</h1>
+            <p className={styles.body}>
+              Not enough providers had availability for your dates to build complete itineraries.
+              Trying different dates often helps.
             </p>
             <Link href="/" className={styles.cta}>
               Start a new request

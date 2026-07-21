@@ -101,10 +101,50 @@ export async function saveExtraction(requestId: string, extraction: ExtractionOu
 
 export async function setRequestStatus(
   requestId: string,
-  status: "building" | "proposals_ready" | "paid" | "expired"
+  status:
+    | "building"
+    | "awaiting_providers"
+    | "proposals_ready"
+    | "no_availability"
+    | "paid"
+    | "expired"
 ): Promise<void> {
   const pool = getPool();
   await pool.query(`UPDATE client_requests SET status = $2 WHERE id = $1`, [requestId, status]);
+}
+
+/**
+ * Opens the provider-acceptance window: stamps when it closes and flips the
+ * request to `awaiting_providers`. Called at the end of Phase 1.
+ */
+export async function openProviderWindow(requestId: string, windowMinutes: number): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE client_requests
+     SET status = 'awaiting_providers',
+         provider_window_closes_at = now() + ($2 || ' minutes')::interval
+     WHERE id = $1`,
+    [requestId, windowMinutes]
+  );
+}
+
+/**
+ * Ids of requests whose acceptance window has closed and are ready to finalize.
+ * `SKIP LOCKED` lets overlapping cron ticks divide the work without colliding.
+ */
+export async function getRequestsPastWindow(limit = 20): Promise<string[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT id FROM client_requests
+     WHERE status = 'awaiting_providers'
+       AND provider_window_closes_at IS NOT NULL
+       AND provider_window_closes_at <= now()
+     ORDER BY provider_window_closes_at
+     LIMIT $1
+     FOR UPDATE SKIP LOCKED`,
+    [limit]
+  );
+  return rows.map((r: any) => r.id);
 }
 
 // ─── Proposal cache (ephemeral hold) ──────────────────────────────────────

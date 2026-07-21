@@ -7,48 +7,19 @@
 //
 // EVERYTHING the client-facing price implies (budget, markup, client_total) is
 // kept server-side; the view models below expose only the provider NET rate.
-import { applyMarkup } from "../pricing";
-import { Experience } from "../types";
 import {
   ActiveRequestRow,
   getActiveRequests,
   getProvider,
   getProviderExperiences,
   getResponsesForProvider,
-  insertResponse,
+  resolveResponse,
   listProviders,
   ProviderRow,
 } from "./store";
 
-/** How long a provider has to respond before it counts as no-response. */
-export const RESPONSE_WINDOW_MINUTES = 20;
-
-const DAY_ABBR = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-function dayOfWeekAbbr(date: string): string {
-  return DAY_ABBR[new Date(`${date}T00:00:00Z`).getUTCDay()];
-}
-
-function tripDayAbbrevs(arrivalDate: string, departureDate: string): Set<string> {
-  const out = new Set<string>();
-  const cursor = new Date(`${arrivalDate}T00:00:00Z`);
-  const end = new Date(`${departureDate}T00:00:00Z`);
-  while (cursor <= end) {
-    out.add(dayOfWeekAbbr(cursor.toISOString().slice(0, 10)));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return out;
-}
-
-/** Coarse match: same rules the assembly pipeline uses (SBI-07). */
-function requestMatchesExperience(req: ActiveRequestRow, exp: Experience): boolean {
-  if (req.interests.length && !req.interests.includes(exp.category)) return false;
-  const tripDays = tripDayAbbrevs(req.arrival_date, req.departure_date);
-  const openDays = exp.open_days.split(",").map((s) => s.trim());
-  if (!openDays.some((d) => tripDays.has(d))) return false;
-  if (applyMarkup(exp.net_price) > req.budget_total) return false;
-  return true;
-}
+/** How long a provider has to respond before the window is treated as closed. */
+export const RESPONSE_WINDOW_MINUTES = 10;
 
 /** A pending availability request shown in the inbox. NET rate only. */
 export interface AvailabilityRequest {
@@ -116,34 +87,32 @@ export async function getProviderInbox(providerId: string): Promise<ProviderInbo
     getResponsesForProvider(providerId),
   ]);
 
-  const answered = new Map<string, (typeof responses)[number]>();
-  for (const r of responses) answered.set(`${r.request_id}|${r.experience_id}`, r);
-
   const expById = new Map(experiences.map((e) => [e.id, e]));
-  const pending: AvailabilityRequest[] = [];
+  const reqById = new Map<string, ActiveRequestRow>(requests.map((r) => [r.id, r]));
 
-  for (const req of requests) {
-    for (const exp of experiences) {
-      if (!requestMatchesExperience(req, exp)) continue;
-      const key = `${req.id}|${exp.id}`;
-      if (answered.has(key)) continue; // already in history
-      const netTotal = exp.net_price * req.travelers;
-      const created = new Date(req.created_at);
-      const expires = new Date(created.getTime() + RESPONSE_WINDOW_MINUTES * 60_000);
-      pending.push({
-        requestId: req.id,
-        experienceId: exp.id,
-        ticket: ticketRef(req.id, exp.id),
-        serviceName: exp.name,
-        date: req.arrival_date,
-        time: exp.open_from.slice(0, 5),
-        travelers: req.travelers,
-        netRatePerPerson: exp.net_price,
-        netRateTotal: netTotal,
-        createdAt: created.toISOString(),
-        windowExpiresAt: expires.toISOString(),
-      });
-    }
+  // Pending = real availability-request rows still awaiting this provider's
+  // decision (created in Phase 1). No on-the-fly matching anymore.
+  const pending: AvailabilityRequest[] = [];
+  for (const r of responses) {
+    if (r.status !== "pending") continue;
+    const exp = expById.get(r.experience_id);
+    const req = reqById.get(r.request_id);
+    if (!exp || !req) continue; // request no longer active or exp not owned
+    const requested = new Date(r.requested_at);
+    const expires = new Date(requested.getTime() + RESPONSE_WINDOW_MINUTES * 60_000);
+    pending.push({
+      requestId: r.request_id,
+      experienceId: r.experience_id,
+      ticket: ticketRef(r.request_id, r.experience_id),
+      serviceName: exp.name,
+      date: req.arrival_date,
+      time: exp.open_from.slice(0, 5),
+      travelers: req.travelers,
+      netRatePerPerson: exp.net_price,
+      netRateTotal: r.net_rate,
+      createdAt: requested.toISOString(),
+      windowExpiresAt: expires.toISOString(),
+    });
   }
 
   // Live requests (window still open) first, then most recent.
@@ -155,22 +124,22 @@ export async function getProviderInbox(providerId: string): Promise<ProviderInbo
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const history: HistoryItem[] = responses.map((r) => {
-    const exp = expById.get(r.experience_id);
-    return {
-      requestId: r.request_id,
-      experienceId: r.experience_id,
-      ticket: ticketRef(r.request_id, r.experience_id),
-      serviceName: exp?.name ?? r.experience_id,
-      // history keeps its own recorded date via decided_at; the trip date is not
-      // re-derived here (the request may have moved on), decided_at is enough.
-      date: r.decided_at.slice(0, 10),
-      travelers: exp ? Math.max(1, Math.round(r.net_rate / exp.net_price)) : 1,
-      decision: r.decision,
-      netRateTotal: r.net_rate,
-      decidedAt: r.decided_at,
-    };
-  });
+  const history: HistoryItem[] = responses
+    .filter((r) => r.status !== "pending" && r.decision != null && r.decided_at != null)
+    .map((r) => {
+      const exp = expById.get(r.experience_id);
+      return {
+        requestId: r.request_id,
+        experienceId: r.experience_id,
+        ticket: ticketRef(r.request_id, r.experience_id),
+        serviceName: exp?.name ?? r.experience_id,
+        date: r.decided_at!.slice(0, 10),
+        travelers: exp ? Math.max(1, Math.round(r.net_rate / exp.net_price)) : 1,
+        decision: r.decision!,
+        netRateTotal: r.net_rate,
+        decidedAt: r.decided_at!,
+      };
+    });
 
   return {
     provider: {
@@ -212,6 +181,6 @@ export async function recordProviderResponse(params: {
   if (!req) return { ok: false, error: "request_not_active" };
 
   const netRate = exp.net_price * req.travelers;
-  await insertResponse({ providerId, requestId, experienceId, decision, netRate });
+  await resolveResponse({ providerId, requestId, experienceId, decision, netRate });
   return { ok: true };
 }

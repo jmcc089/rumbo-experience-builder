@@ -12,7 +12,19 @@
  * cap becomes possible once that is addressed or the catalog grows.
  */
 export const MAX_TRIP_SPAN_DAYS = 10;
+
+// ─── Provider availability flow (request → accept → propose) ────────────────
+//
+// On submit, every matching provider/experience gets a *pending* availability
+// request. A ~10-minute window later, still-pending requests are resolved by a
+// simulated responder (truly random, PROVIDER_ACCEPT_RATE chance to accept),
+// and proposals are assembled from the accepted experiences only. There is no
+// formal/informal distinction — all providers go through the same flow.
+
+/** Minutes a client request waits for provider acceptances before finalizing. */
 export const PROVIDER_RESPONSE_WINDOW_MIN = 10;
+
+/** Probability (0–1) that a simulated provider accepts an availability request. */
 export const PROVIDER_ACCEPT_RATE = 0.8;
 
 /** Whole days between two 'YYYY-MM-DD' dates (departure − arrival). */

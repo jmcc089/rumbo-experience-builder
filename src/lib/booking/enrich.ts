@@ -15,6 +15,7 @@ import type {
   ItinerarySnapshot,
   ItineraryScores,
   LodgingTier,
+  RequestStatus,
 } from "../types";
 import { getProposals } from "./requests";
 import { getRequestByToken } from "./store";
@@ -300,7 +301,7 @@ async function loadPaidItinerary(requestId: string, arrivalDate: string): Promis
 /** Lightweight status read that does NOT start the hold — for the status page poll. */
 export async function getRequestStatus(
   token: string
-): Promise<{ status: "building" | "proposals_ready" | "paid" | "expired" | "not_found" }> {
+): Promise<{ status: RequestStatus | "not_found" }> {
   const request = await getRequestByToken(token);
   if (!request) return { status: "not_found" };
   return { status: request.status };

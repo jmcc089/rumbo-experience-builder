@@ -15,16 +15,26 @@ import {
   assemble,
   AssembleProblem,
   CandidateExperience,
-  parseTime,
 } from "../engine";
 import {
   deriveWeights,
   selectedInterests,
   extractConstraints,
 } from "../llm";
-import { backgroundOccupancy, effectiveSpots, resolveConfirmation } from "../availability";
-import { spotsConsumedByRealOrders } from "./consumption";
-import { getRequestById, saveExtraction, saveProposals, setRequestStatus } from "./store";
+import {
+  getRequestById,
+  saveExtraction,
+  saveProposals,
+  setRequestStatus,
+  openProviderWindow,
+} from "./store";
+import {
+  insertPendingRequests,
+  getPendingForRequest,
+  getConfirmedExperienceIds,
+  resolveResponse,
+} from "../provider/store";
+import { PROVIDER_RESPONSE_WINDOW_MIN, PROVIDER_ACCEPT_RATE } from "../config";
 import { PipelineHooks } from "./types";
 import { sendProposalsReady } from "../email";
 
@@ -117,51 +127,14 @@ export async function matchFilter(
   return { experiences, lodging };
 }
 
-/**
- * Step 3: ask each matched provider via their portal (simulated). Uses the
- * representative arrival-date + the experience's own open_from slot to
- * resolve a single confirm/no_capacity/no_response result per experience for
- * this request (SBI-04's confirmation model is per-slot, not per-day; one
- * representative check stands in for "the provider was asked and answered").
- */
-export async function confirmAvailability(
-  experiences: (Experience & { provider: Provider })[],
-  arrivalDate: string,
-  travelers: number
-): Promise<CandidateExperience[]> {
-  const confirmed: CandidateExperience[] = [];
-
-  for (const exp of experiences) {
-    const slotStart = parseTime(exp.open_from);
-    const occupancy = backgroundOccupancy(
-      exp.id as unknown as number,
-      arrivalDate,
-      slotStart,
-      exp.provider.base_popularity
-    );
-    const realConsumption = await spotsConsumedByRealOrders(exp.id, arrivalDate);
-    const { available } = effectiveSpots(exp.capacity_per_slot, travelers, occupancy, realConsumption);
-
-    const result = resolveConfirmation(
-      exp.provider.confirmation_mode,
-      exp.provider.reliability_score,
-      available,
-      exp.id as unknown as number,
-      arrivalDate,
-      slotStart
-    );
-
-    if (result !== "confirmed") continue;
-
-    confirmed.push({
-      ...exp,
-      provider_base_popularity: exp.provider.base_popularity,
-      provider_confirmation_mode: exp.provider.confirmation_mode,
-      provider_reliability_score: exp.provider.reliability_score,
-    });
-  }
-
-  return confirmed;
+/** Map a matched experience (+ its provider) into an engine candidate. */
+export function toCandidate(exp: Experience & { provider: Provider }): CandidateExperience {
+  return {
+    ...exp,
+    provider_base_popularity: exp.provider.base_popularity,
+    provider_confirmation_mode: exp.provider.confirmation_mode,
+    provider_reliability_score: exp.provider.reliability_score,
+  };
 }
 
 export async function loadTransferMatrix(): Promise<TransferMatrix[]> {
@@ -185,13 +158,18 @@ export function tripDates(arrivalDate: string, departureDate: string): string[] 
   return dates;
 }
 
-export async function runPipeline(requestId: string, hooks: PipelineHooks = {}): Promise<void> {
+// ─── Phase 1: send availability requests to every matching provider ─────────
+//
+// Runs synchronously right after intake (via `after()`), so it must be fast: it
+// only matches the catalog, records one PENDING availability request per
+// matched experience, and opens the acceptance window. Proposals are NOT built
+// here — that happens in finalizeProposals() once the window closes.
+export async function startAvailabilityRequests(requestId: string): Promise<void> {
   const request = await getRequestById(requestId);
-  if (!request) throw new Error(`runPipeline: request ${requestId} not found`);
+  if (!request) throw new Error(`startAvailabilityRequests: request ${requestId} not found`);
 
   const prefs = request.prefs_json;
   const interests = selectedInterests(prefs);
-  const weights = deriveWeights(prefs);
 
   // LLM boundary: extract additive hard constraints + personalization notes
   // from free text. Fails safe to SAFE_DEFAULT_EXTRACTION on any LLM error.
@@ -204,21 +182,67 @@ export async function runPipeline(requestId: string, hooks: PipelineHooks = {}):
   });
   await saveExtraction(requestId, extraction);
 
-  const { experiences: matched, lodging } = await matchFilter(
+  const { experiences: matched } = await matchFilter(
     interests,
     request.arrival_date,
     request.departure_date,
     request.budget_total
   );
 
-  const candidatePool = await confirmAvailability(matched, request.arrival_date, request.travelers);
+  // One pending availability request per matched experience. NET rate (provider
+  // total) is stored — never a client price.
+  await insertPendingRequests(
+    matched.map((exp) => ({
+      requestId,
+      experienceId: exp.id,
+      providerId: exp.provider_id,
+      netRate: exp.net_price * request.travelers,
+    }))
+  );
 
-  // NOTE: `extraction.extra_hard_constraints` (dietary/mobility) are additive
-  // filters per SBI-06's handoff. The current catalog schema has no
-  // per-experience dietary/mobility fields to filter on (dietary options live
-  // only on `provider_personalization`, used for personalization text, not as
-  // a machine-checkable constraint) — so no candidate is dropped here today.
-  // Left as the wiring point once such fields exist; see task_list.md open issues.
+  await openProviderWindow(requestId, PROVIDER_RESPONSE_WINDOW_MIN);
+}
+
+// ─── Phase 2: window closed → resolve, then build proposals from acceptances ──
+//
+// Called by the cron poller for each request past its window. Idempotent: it
+// only acts on requests still `awaiting_providers`.
+export async function finalizeProposals(
+  requestId: string,
+  hooks: PipelineHooks = {}
+): Promise<void> {
+  const request = await getRequestById(requestId);
+  if (!request) throw new Error(`finalizeProposals: request ${requestId} not found`);
+  if (request.status !== "awaiting_providers") return; // already finalized / not ready
+
+  // Resolve every still-pending request with a truly-random roll. Rows already
+  // decided by a human in the portal are left as-is (they aren't pending).
+  const pending = await getPendingForRequest(requestId);
+  for (const p of pending) {
+    const decision = Math.random() < PROVIDER_ACCEPT_RATE ? "confirmed" : "declined";
+    await resolveResponse({
+      requestId,
+      experienceId: p.experience_id,
+      providerId: p.provider_id,
+      decision,
+      netRate: p.net_rate,
+    });
+  }
+
+  const confirmedIds = new Set(await getConfirmedExperienceIds(requestId));
+
+  const prefs = request.prefs_json;
+  const interests = selectedInterests(prefs);
+  const weights = deriveWeights(prefs);
+
+  // Rebuild the catalog match and keep only experiences whose provider accepted.
+  const { experiences: matched, lodging } = await matchFilter(
+    interests,
+    request.arrival_date,
+    request.departure_date,
+    request.budget_total
+  );
+  const candidatePool = matched.filter((e) => confirmedIds.has(e.id)).map(toCandidate);
 
   const transferMatrix = await loadTransferMatrix();
 
@@ -240,10 +264,17 @@ export async function runPipeline(requestId: string, hooks: PipelineHooks = {}):
 
   const result = assemble(problem);
 
+  if (result.proposals.length === 0) {
+    // Too few acceptances (or none) to build a trip. Flag it; a dedicated
+    // "no availability" email can be wired here later.
+    await setRequestStatus(requestId, "no_availability");
+    return;
+  }
+
   await saveProposals(requestId, request.token, result.proposals);
   await setRequestStatus(requestId, "proposals_ready");
 
-  // SBI-08 trigger (email 2): the pipeline finished, proposals are ready.
+  // SBI-08 trigger (email 2): proposals are ready to pick + pay.
   await sendProposalsReady(request.email, request.token);
   await hooks.notifyProposalsReady?.({ requestId, token: request.token, email: request.email });
 }

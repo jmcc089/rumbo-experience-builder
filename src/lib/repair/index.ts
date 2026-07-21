@@ -10,7 +10,7 @@ import { hashToUnitFloat } from "../availability";
 import { repair, RepairProblem, RepairResult } from "../engine";
 import { deriveWeights, selectedInterests } from "../llm";
 import { ClientPrefs } from "../types";
-import { matchFilter, confirmAvailability, loadTransferMatrix, tripDates } from "../booking/pipeline";
+import { matchFilter, toCandidate, loadTransferMatrix, tripDates } from "../booking/pipeline";
 import {
   getOrderById,
   getOrderItems,
@@ -107,17 +107,18 @@ export async function repairOrder(orderId: string): Promise<RepairOutcome> {
   const interests = selectedInterests(prefs);
   const weights = deriveWeights(prefs);
 
-  const gapDate = addDays(ctx.arrival_date, disruptedItem.day_index - 1);
-
   const { experiences: matched, lodging } = await matchFilter(
     interests,
     ctx.arrival_date,
     ctx.departure_date,
     ctx.budget_total
   );
-  const confirmed = await confirmAvailability(matched, gapDate, ctx.travelers);
-  // The disrupted experience itself must not be re-picked as its own replacement.
-  const candidatePool = confirmed.filter((e) => e.id !== disruptedItem.ref_id);
+  // Repair is an urgent re-solve of one disrupted day: use the full matched
+  // catalog as candidates (no acceptance simulation here). The disrupted
+  // experience itself must not be re-picked as its own replacement.
+  const candidatePool = matched
+    .filter((e) => e.id !== disruptedItem.ref_id)
+    .map(toCandidate);
 
   const transferMatrix = await loadTransferMatrix();
   const dates = tripDates(ctx.arrival_date, ctx.departure_date);
