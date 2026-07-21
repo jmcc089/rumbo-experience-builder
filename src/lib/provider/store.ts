@@ -130,7 +130,6 @@ export interface ProviderResponseRow {
   request_id: string;
   experience_id: string;
   status: ResponseStatus;
-  decision: "confirmed" | "declined" | null;
   net_rate: number;
   requested_at: string;
   decided_at: string | null;
