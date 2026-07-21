@@ -12,6 +12,8 @@
  * cap becomes possible once that is addressed or the catalog grows.
  */
 export const MAX_TRIP_SPAN_DAYS = 10;
+export const PROVIDER_RESPONSE_WINDOW_MIN = 10;
+export const PROVIDER_ACCEPT_RATE = 0.8;
 
 /** Whole days between two 'YYYY-MM-DD' dates (departure − arrival). */
 export function tripSpanDays(arrival: string, departure: string): number {
