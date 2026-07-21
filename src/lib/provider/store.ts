@@ -106,7 +106,7 @@ export async function getActiveRequests(): Promise<ActiveRequestRow[]> {
   const { rows } = await pool.query(
     `SELECT id, arrival_date, departure_date, travelers, budget_total, prefs_json, created_at
      FROM client_requests
-     WHERE status IN ('building', 'proposals_ready')
+     WHERE status IN ('building', 'awaiting_providers', 'proposals_ready')
      ORDER BY created_at DESC
      LIMIT 40`
   );
@@ -124,40 +124,104 @@ export async function getActiveRequests(): Promise<ActiveRequestRow[]> {
   }));
 }
 
+export type ResponseStatus = "pending" | "confirmed" | "declined";
+
 export interface ProviderResponseRow {
   request_id: string;
   experience_id: string;
-  decision: "confirmed" | "declined";
+  status: ResponseStatus;
+  decision: "confirmed" | "declined" | null;
   net_rate: number;
-  decided_at: string;
+  requested_at: string;
+  decided_at: string | null;
+}
+
+function toIsoOrNull(value: string | Date | null): string | null {
+  if (value == null) return null;
+  return typeof value === "string" ? value : value.toISOString();
 }
 
 /** All stored responses for a provider (used to split inbox vs. history). */
 export async function getResponsesForProvider(providerId: string): Promise<ProviderResponseRow[]> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT request_id, experience_id, decision, net_rate, decided_at
+    `SELECT request_id, experience_id, status, decision, net_rate, requested_at, decided_at
      FROM provider_responses
      WHERE provider_id = $1
-     ORDER BY decided_at DESC`,
+     ORDER BY COALESCE(decided_at, requested_at) DESC`,
     [providerId]
   );
   return rows.map((r) => ({
     request_id: r.request_id,
     experience_id: r.experience_id,
+    status: r.status,
     decision: r.decision,
     net_rate: Number(r.net_rate),
-    decided_at:
-      typeof r.decided_at === "string" ? r.decided_at : r.decided_at.toISOString(),
+    requested_at: toIsoOrNull(r.requested_at)!,
+    decided_at: toIsoOrNull(r.decided_at),
   }));
 }
 
 /**
- * Persist a confirm/decline. Idempotent per (request, experience): a second
- * response overwrites the first (a provider can change their mind in the demo).
- * The caller passes the NET rate (provider total) — never a client price.
+ * Phase 1: create one PENDING availability request per matched experience.
+ * Batched into a single INSERT. Idempotent per (request, experience): re-running
+ * leaves any already-recorded row untouched.
  */
-export async function insertResponse(params: {
+export async function insertPendingRequests(
+  rows: Array<{ requestId: string; experienceId: string; providerId: string; netRate: number }>
+): Promise<void> {
+  if (rows.length === 0) return;
+  const pool = getPool();
+  const values: string[] = [];
+  const params: unknown[] = [];
+  rows.forEach((r, i) => {
+    const b = i * 4;
+    values.push(`($${b + 1}, $${b + 2}, $${b + 3}, 'pending', $${b + 4})`);
+    params.push(r.requestId, r.experienceId, r.providerId, r.netRate);
+  });
+  await pool.query(
+    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, net_rate)
+     VALUES ${values.join(", ")}
+     ON CONFLICT (request_id, experience_id) DO NOTHING`,
+    params
+  );
+}
+
+/** Phase 2: the availability requests still awaiting a response for a request. */
+export async function getPendingForRequest(
+  requestId: string
+): Promise<Array<{ experience_id: string; provider_id: string; net_rate: number }>> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT experience_id, provider_id, net_rate
+     FROM provider_responses
+     WHERE request_id = $1 AND status = 'pending'`,
+    [requestId]
+  );
+  return rows.map((r: any) => ({
+    experience_id: r.experience_id,
+    provider_id: r.provider_id,
+    net_rate: Number(r.net_rate),
+  }));
+}
+
+/** Experience ids whose provider accepted, for building the candidate pool. */
+export async function getConfirmedExperienceIds(requestId: string): Promise<string[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT experience_id FROM provider_responses
+     WHERE request_id = $1 AND status = 'confirmed'`,
+    [requestId]
+  );
+  return rows.map((r: any) => r.experience_id);
+}
+
+/**
+ * Resolve a single availability request to confirmed/declined. Used both by the
+ * simulated responder (Phase 2) and by a human accepting/declining in the
+ * portal. The NET rate (provider total) is passed in — never a client price.
+ */
+export async function resolveResponse(params: {
   requestId: string;
   experienceId: string;
   providerId: string;
@@ -165,11 +229,13 @@ export async function insertResponse(params: {
   netRate: number;
 }): Promise<void> {
   const pool = getPool();
+  // Upsert so a manual portal decision still works even if no pending row exists.
   await pool.query(
-    `INSERT INTO provider_responses (request_id, experience_id, provider_id, decision, net_rate)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, decision, net_rate, decided_at)
+     VALUES ($1, $2, $3, $4, $4, $5, now())
      ON CONFLICT (request_id, experience_id)
-     DO UPDATE SET decision = EXCLUDED.decision, net_rate = EXCLUDED.net_rate, decided_at = now()`,
+     DO UPDATE SET status = EXCLUDED.status, decision = EXCLUDED.decision,
+                   net_rate = EXCLUDED.net_rate, decided_at = now()`,
     [params.requestId, params.experienceId, params.providerId, params.decision, params.netRate]
   );
 }

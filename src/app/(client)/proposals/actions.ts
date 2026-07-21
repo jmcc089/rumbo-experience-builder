@@ -1,6 +1,7 @@
 "use server";
 
 import { confirmAndPay, getRequestStatus } from "@/lib/booking";
+import type { RequestStatus } from "@/lib/types";
 
 export type BookTripResult =
   | { status: "paid"; orderId: string }
@@ -31,7 +32,7 @@ export async function bookTrip(token: string, chosenIndex: number): Promise<Book
 
 /** Poll target for the status page. Reads status without starting the hold. */
 export async function pollStatus(token: string): Promise<{
-  status: "building" | "proposals_ready" | "paid" | "expired" | "not_found";
+  status: RequestStatus | "not_found";
 }> {
   if (typeof token !== "string" || !token) return { status: "not_found" };
   return getRequestStatus(token);

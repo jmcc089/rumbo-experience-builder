@@ -1,0 +1,23 @@
+name: Finalize provider windows
+
+# Polls the Phase-2 finalizer every 5 minutes (GitHub's minimum cron interval).
+# Any client request whose ~10-minute acceptance window has closed gets its
+# proposals built and its "ready" email sent.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   APP_URL      e.g. https://rumbo-experience-builder.vercel.app  (no trailing slash)
+#   CRON_SECRET  same value set as an env var in Vercel
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the finalize endpoint
+        run: |
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/finalize"

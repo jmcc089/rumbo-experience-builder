@@ -2,7 +2,7 @@
 // Run: npx tsx src/lib/booking/verify.ts
 import { getPool } from "../db/pool";
 import { ExperienceCategory } from "../types";
-import { createRequest, runRequestPipeline, getProposals, confirmAndPay } from "./index";
+import { createRequest, runRequestPipeline, finalizeRequestProposals, getProposals, confirmAndPay } from "./index";
 import { HOLD_WINDOW_MINUTES } from "./types";
 
 function assert(cond: boolean, msg: string) {
@@ -39,9 +39,12 @@ async function main() {
   const { id: requestId2, token: token2 } = await createRequest(intake);
   assert(token !== token2, "two requests get distinct tokens");
 
-  // ── 2. Run pipeline ─────────────────────────────────────────────────────
-  await runRequestPipeline(requestId);
+  // ── 2. Run pipeline (Phase 1 sends requests; Phase 2 finalizes) ──────────
+  await runRequestPipeline(requestId); // Phase 1: pending availability requests + open window
+  await finalizeRequestProposals(requestId); // Phase 2: resolve (random 80% accept) + assemble
   const statusRow = await pool.query(`SELECT status FROM client_requests WHERE id = $1`, [requestId]);
+  // NOTE: acceptance is truly random; with broad interests + full catalog this
+  // is ~always proposals_ready, but a very unlucky roll could yield no_availability.
   assert(statusRow.rows[0].status === "proposals_ready", "pipeline sets status proposals_ready");
 
   // ── 3. getProposals starts the hold on first call, not before ─────────
@@ -96,6 +99,7 @@ async function main() {
 
   // ── 6. Expiry path (simulate by forcing expires_at into the past) ──────
   await runRequestPipeline(requestId2);
+  await finalizeRequestProposals(requestId2);
   const view3 = await getProposals(token2); // starts the hold
   assert(view3.status === "ready", "second request's proposals ready before forcing expiry");
 

@@ -77,7 +77,13 @@ export interface ProviderPersonalization {
   extras_on_request: string | null;
 }
 
-export type RequestStatus = "building" | "proposals_ready" | "paid" | "expired";
+export type RequestStatus =
+  | "building"
+  | "awaiting_providers" // request sent to providers; waiting on acceptances
+  | "proposals_ready"
+  | "no_availability" // window closed with too few acceptances to build a trip
+  | "paid"
+  | "expired";
 
 export interface ClientRequest {
   id: string;

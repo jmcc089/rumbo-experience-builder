@@ -5,13 +5,14 @@ import { generateProviderInstructions, OrderProviderInstructions } from "../llm"
 import {
   getProposalCache,
   getRequestByToken,
+  getRequestsPastWindow,
   insertClientRequest,
   insertOrder,
   markViewedIfFirst,
   NewOrderItem,
   setRequestStatus,
 } from "./store";
-import { runPipeline } from "./pipeline";
+import { startAvailabilityRequests, finalizeProposals } from "./pipeline";
 import { sendAcknowledgment, sendPurchaseConfirmation, OrderSummary } from "../email";
 import {
   ConfirmAndPayResult,
@@ -33,9 +34,26 @@ export async function createRequest(intake: IntakeInput): Promise<CreateRequestR
   return result;
 }
 
-/** Orchestrates match filter -> availability -> engine -> stores proposals under the token. */
-export async function runRequestPipeline(requestId: string, hooks?: PipelineHooks): Promise<void> {
-  await runPipeline(requestId, hooks);
+/**
+ * Phase 1 (fires from intake via `after()`): match the catalog and send a
+ * pending availability request to every matching provider, then open the
+ * acceptance window. Proposals are built later by the cron finalizer.
+ */
+export async function runRequestPipeline(requestId: string): Promise<void> {
+  await startAvailabilityRequests(requestId);
+}
+
+/** Phase 2: finalize one request whose acceptance window has closed. */
+export async function finalizeRequestProposals(
+  requestId: string,
+  hooks?: PipelineHooks
+): Promise<void> {
+  await finalizeProposals(requestId, hooks);
+}
+
+/** Ids of requests whose acceptance window has closed (for the cron poller). */
+export async function getDueRequestIds(): Promise<string[]> {
+  return getRequestsPastWindow();
 }
 
 /** Retrieves the 3 proposals for a token. Starts the 15-min hold on first call. */
