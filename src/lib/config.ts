@@ -1,6 +1,6 @@
 // Rumbo · product configuration constants.
 // Pure/runtime-dep-free so it is safe to import from both client and server code.
-
+import type { LodgingTier } from "./types";
 /**
  * Maximum trip length the builder accepts, expressed as the number of days
  * between arrival and departure (`departure_date − arrival_date`).
@@ -39,4 +39,18 @@ export function maxDepartureDate(arrival: string): string {
   const d = new Date(`${arrival}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + MAX_TRIP_SPAN_DAYS);
   return d.toISOString().slice(0, 10);
+}
+// ─── Minimum budget floor ───────────────────────────────────────────────────
+// The client enters a CLIENT-FACING budget (markup already included). Below a
+// realistic per-day floor per tier, no trip can be assembled, so we reject at
+// intake instead of silently returning zero proposals.
+export const MIN_BUDGET_PER_DAY: Record<LodgingTier, number> = {
+  budget: 70,
+  comfort: 130,
+  premium: 230,
+};
+
+/** Lowest client budget accepted for a trip of `spanDays` nights at `tier`. */
+export function minBudgetFor(spanDays: number, tier: LodgingTier): number {
+  return MIN_BUDGET_PER_DAY[tier] * Math.max(1, spanDays);
 }
