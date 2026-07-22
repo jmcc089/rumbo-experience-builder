@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from "react";
 import type { ExperienceCategory, ClientPrefs } from "@/lib/types";
-import { MAX_TRIP_SPAN_DAYS, maxDepartureDate, tripSpanDays } from "@/lib/config";
+import { MAX_TRIP_SPAN_DAYS, maxDepartureDate, tripSpanDays, minBudgetFor } from "@/lib/config";
 import { submitIntake, type IntakePayload } from "../actions";
 import styles from "./IntakeForm.module.css";
-import { MAX_TRIP_SPAN_DAYS, maxDepartureDate, tripSpanDays, minBudgetFor } from "@/lib/config";
 
 /* ------------------------------------------------------------------ */
 /* Option tables                                                       */

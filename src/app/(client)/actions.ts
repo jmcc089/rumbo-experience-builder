@@ -4,7 +4,6 @@ import { after } from "next/server";
 import { createRequest, runRequestPipeline } from "@/lib/booking";
 import type { IntakeInput } from "@/lib/booking";
 import type { ClientPrefs, ExperienceCategory } from "@/lib/types";
-import { MAX_TRIP_SPAN_DAYS, tripSpanDays } from "@/lib/config";
 import { MAX_TRIP_SPAN_DAYS, tripSpanDays, minBudgetFor } from "@/lib/config";
 
 /**
