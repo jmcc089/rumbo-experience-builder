@@ -144,8 +144,8 @@ function toIsoOrNull(value: string | Date | null): string | null {
 export async function getResponsesForProvider(providerId: string): Promise<ProviderResponseRow[]> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT request_id, experience_id, status, decision, net_rate, requested_at, decided_at
-     FROM provider_responses
+    `SELECT request_id, experience_id, status, net_rate, requested_at, decided_at
+    FROM provider_responses
      WHERE provider_id = $1
      ORDER BY COALESCE(decided_at, requested_at) DESC`,
     [providerId]
@@ -154,7 +154,6 @@ export async function getResponsesForProvider(providerId: string): Promise<Provi
     request_id: r.request_id,
     experience_id: r.experience_id,
     status: r.status,
-    decision: r.decision,
     net_rate: Number(r.net_rate),
     requested_at: toIsoOrNull(r.requested_at)!,
     decided_at: toIsoOrNull(r.decided_at),
@@ -230,10 +229,10 @@ export async function resolveResponse(params: {
   const pool = getPool();
   // Upsert so a manual portal decision still works even if no pending row exists.
   await pool.query(
-    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, decision, net_rate, decided_at)
-     VALUES ($1, $2, $3, $4, $4, $5, now())
+    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, net_rate, decided_at)
+     VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT (request_id, experience_id)
-     DO UPDATE SET status = EXCLUDED.status, decision = EXCLUDED.decision,
+     DO UPDATE SET status = EXCLUDED.status,
                    net_rate = EXCLUDED.net_rate, decided_at = now()`,
     [params.requestId, params.experienceId, params.providerId, params.decision, params.netRate]
   );
