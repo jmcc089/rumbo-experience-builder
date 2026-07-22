@@ -5,6 +5,7 @@ import type { ExperienceCategory, ClientPrefs } from "@/lib/types";
 import { MAX_TRIP_SPAN_DAYS, maxDepartureDate, tripSpanDays } from "@/lib/config";
 import { submitIntake, type IntakePayload } from "../actions";
 import styles from "./IntakeForm.module.css";
+import { MAX_TRIP_SPAN_DAYS, maxDepartureDate, tripSpanDays, minBudgetFor } from "@/lib/config";
 
 /* ------------------------------------------------------------------ */
 /* Option tables                                                       */
@@ -144,6 +145,20 @@ export default function IntakeForm() {
     setError(null);
     if (!step1Valid || !step2Valid || !step3Valid) {
       setError("Please complete every step before submitting.");
+      return;
+    }
+   if (!step1Valid || !step2Valid || !step3Valid) {
+      setError("Please complete every step before submitting.");
+      return;
+    }
+    // Budget floor — tier is known by now (step 2). Mirror the server check.
+    const span = tripSpanDays(form.arrival_date, form.departure_date);
+    const tier = form.lodging_tier || "budget";
+    const minBudget = minBudgetFor(span, tier);
+    if (Number(form.budget_total) < minBudget) {
+      setError(
+        `For a ${span + 1}-day trip at ${tier} lodging, the minimum budget is $${minBudget.toLocaleString()}.`
+      );
       return;
     }
     setSubmitting(true);
