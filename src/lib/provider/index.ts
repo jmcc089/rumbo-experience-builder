@@ -125,7 +125,7 @@ export async function getProviderInbox(providerId: string): Promise<ProviderInbo
   });
 
   const history: HistoryItem[] = responses
-    .filter((r) => r.status !== "pending" && r.decision != null && r.decided_at != null)
+    .filter((r) => r.status !== "pending" && r.decided_at != null)
     .map((r) => {
       const exp = expById.get(r.experience_id);
       return {
@@ -135,7 +135,7 @@ export async function getProviderInbox(providerId: string): Promise<ProviderInbo
         serviceName: exp?.name ?? r.experience_id,
         date: r.decided_at!.slice(0, 10),
         travelers: exp ? Math.max(1, Math.round(r.net_rate / exp.net_price)) : 1,
-        decision: r.decision!,
+        decision: r.status as "confirmed" | "declined",
         netRateTotal: r.net_rate,
         decidedAt: r.decided_at!,
       };
