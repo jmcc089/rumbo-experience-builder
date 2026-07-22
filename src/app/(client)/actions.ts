@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { createRequest, runRequestPipeline } from "@/lib/booking";
 import type { IntakeInput } from "@/lib/booking";
 import type { ClientPrefs, ExperienceCategory } from "@/lib/types";
-import { MAX_TRIP_SPAN_DAYS, tripSpanDays, minBudgetFor } from "@/lib/config";
+import { MAX_TRIP_SPAN_DAYS, tripSpanDays, tierForBudget } from "@/lib/config";
 
 /**
  * Payload shipped from the intake form (client component) to the server.
@@ -70,22 +70,21 @@ export async function submitIntake(
   if (!(payload.travelers >= 1)) {
     return { ok: false, error: "At least one traveler is required." };
   }
-  const tier = payload.lodging_tier ?? "budget";
-  const span = tripSpanDays(payload.arrival_date, payload.departure_date);
-  const minBudget = minBudgetFor(span, tier);
-  if (!(payload.budget_total >= minBudget)) {
-    return {
-      ok: false,
-      error: `For a ${span + 1}-day trip at ${tier} lodging, the minimum budget is $${minBudget.toLocaleString()}.`,
-    };
+  if (!(payload.budget_total > 0)) {
+    return { ok: false, error: "A budget is required." };
   }
+
+  // The client no longer picks a lodging level — the budget defines it.
+  // Derive the tier here (authoritative); ignore whatever the client sends.
+  const span = tripSpanDays(payload.arrival_date, payload.departure_date);
+  const tier = tierForBudget(span, payload.budget_total, payload.travelers);
 
   const prefs: ClientPrefs = {
     interests: payload.interests,
     pace: payload.pace,
     mornings: payload.mornings,
     group_composition: payload.group_composition,
-    lodging_tier: payload.lodging_tier,
+    lodging_tier: tier,
   };
 
   const intake: IntakeInput = {

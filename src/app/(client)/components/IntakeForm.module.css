@@ -153,6 +153,41 @@
   box-shadow: 0 0 0 3px rgba(15, 71, 175, 0.1);
 }
 
+/* Native date/time controls paint their literal separators (the "/" and ":")
+   at full color even with no value set, which clashes with the greyed-out
+   placeholder digits. Mute the whole control until a real value exists. */
+.inputEmpty,
+.inputEmpty::-webkit-datetime-edit {
+  color: #9aa4b5;
+}
+
+/* Time pickers are native selects (approximate, stepped). Strip the OS chrome
+   and draw a caret so they match the text inputs. */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239aa4b5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+/* Live budget → lodging-band hint, shown under the basics grid. */
+.rangeHint {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.rangeHint strong {
+  color: var(--navy);
+  font-weight: 600;
+}
+.rangeHintLow {
+  color: #b4690e;
+}
+
 .moneyWrap {
   position: relative;
   display: flex;

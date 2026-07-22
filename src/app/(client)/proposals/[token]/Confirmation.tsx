@@ -65,7 +65,7 @@ export default function Confirmation({
 
       <div className={styles.confirmFooter}>
         <p className={styles.demoNote}>
-          This is a demonstration of Rumbo’s coordination system. Payment is simulated — no card details
+          This is a demonstration of Rumbo’s coordination system. Payment is simulated. No card details
           are collected and no charge is made.
         </p>
         <Link href="/" className={styles.confirmHome}>

@@ -1,6 +1,7 @@
 // Rumbo · product configuration constants.
 // Pure/runtime-dep-free so it is safe to import from both client and server code.
 import type { LodgingTier } from "./types";
+import { MARKUP_RATE } from "./pricing";
 /**
  * Maximum trip length the builder accepts, expressed as the number of days
  * between arrival and departure (`departure_date − arrival_date`).
@@ -53,4 +54,61 @@ export const MIN_BUDGET_PER_DAY: Record<LodgingTier, number> = {
 /** Lowest client budget accepted for a trip of `spanDays` nights at `tier`. */
 export function minBudgetFor(spanDays: number, tier: LodgingTier): number {
   return MIN_BUDGET_PER_DAY[tier] * Math.max(1, spanDays);
+}
+
+/** Client-facing budget spread across the trip, per night. */
+export function budgetPerDay(spanDays: number, budgetTotal: number): number {
+  return budgetTotal / Math.max(1, spanDays);
+}
+
+// ─── Budget → lodging tier (traveler-aware) ─────────────────────────────────
+// The client no longer picks a tier; the budget implies it. Deriving it well
+// means mirroring how the engine actually spends: experiences cost per person
+// (net × travelers) while lodging is flat per night, all marked up for the
+// client. So a night's realistic client cost at a given tier scales with the
+// party size — a solo traveler unlocks a band far sooner than a family of four.
+//
+// Figures are NET (pre-markup), grounded in the real catalog (2026-07):
+//   lodging/night avg  → budget ~$38, comfort ~$71, premium ~$130
+//   experience avg     → ~$21, at a typical ~2.5 activities/day.
+export const AVG_EXPERIENCE_NET = 21;
+export const EXPERIENCES_PER_DAY = 2.5;
+export const TIER_NIGHT_NET: Record<LodgingTier, number> = {
+  budget: 40,
+  comfort: 72,
+  premium: 130,
+};
+
+/** Estimated client-facing (markup-included) spend per night at `tier`. */
+export function estNightlyClient(tier: LodgingTier, travelers: number): number {
+  const net =
+    TIER_NIGHT_NET[tier] +
+    EXPERIENCES_PER_DAY * AVG_EXPERIENCE_NET * Math.max(1, travelers);
+  return net * (1 + MARKUP_RATE);
+}
+
+/**
+ * Which lodging band a budget unlocks, given trip length and party size. Picks
+ * the highest tier whose estimated nightly cost fits the per-night budget.
+ * Below even the budget tier it still returns "budget" (we try; the engine's
+ * hard budget guard drops proposals it genuinely can't assemble).
+ */
+export function tierForBudget(
+  spanDays: number,
+  budgetTotal: number,
+  travelers: number
+): LodgingTier {
+  const perNight = budgetPerDay(spanDays, budgetTotal);
+  if (perNight >= estNightlyClient("premium", travelers)) return "premium";
+  if (perNight >= estNightlyClient("comfort", travelers)) return "comfort";
+  return "budget";
+}
+
+/** True when the budget is below what even a budget-tier night realistically costs. */
+export function isBudgetLow(
+  spanDays: number,
+  budgetTotal: number,
+  travelers: number
+): boolean {
+  return budgetPerDay(spanDays, budgetTotal) < estNightlyClient("budget", travelers);
 }

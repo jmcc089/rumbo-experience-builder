@@ -36,8 +36,8 @@ export default function Home() {
             none of the planning
           </h1>
           <p className={styles.heroSub}>
-            Tell us how you picture your trip. We build every day of it — you just
-            show up and live it.
+            Tell us how you picture your trip. We build every day of it, so you
+            just show up and live it.
           </p>
           <a href="#intake" className={styles.heroCta}>
             Start planning
@@ -60,7 +60,7 @@ export default function Home() {
           <h2 className={styles.intakeTitle}>Tell us about your trip</h2>
           <p className={styles.intakeLede}>
             Three short steps. The last one is where you tell us what really
-            matters — we shape everything around it.
+            matters, and we shape everything around it.
           </p>
         </div>
         <div className={styles.intakeWrap}>

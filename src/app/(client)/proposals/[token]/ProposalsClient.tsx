@@ -93,7 +93,7 @@ export default function ProposalsClient({
             <span className={styles.eyebrow}>Your itineraries are ready</span>
             <h1 className={styles.h1}>Three ways to see El Salvador</h1>
             <p className={styles.lede}>
-              Each one is complete and ready to book — activities, transfers, meals and where you sleep,
+              Each one is complete and ready to book: activities, transfers, meals and where you sleep,
               every day. Compare them, then choose the trip that feels most like yours.
             </p>
           </div>

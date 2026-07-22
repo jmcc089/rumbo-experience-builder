@@ -1,8 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ExperienceCategory, ClientPrefs } from "@/lib/types";
-import { MAX_TRIP_SPAN_DAYS, maxDepartureDate, tripSpanDays, minBudgetFor } from "@/lib/config";
+import type { ExperienceCategory, ClientPrefs, LodgingTier } from "@/lib/types";
+import {
+  MAX_TRIP_SPAN_DAYS,
+  maxDepartureDate,
+  tripSpanDays,
+  tierForBudget,
+  budgetPerDay,
+  isBudgetLow,
+} from "@/lib/config";
 import { submitIntake, type IntakePayload } from "../actions";
 import styles from "./IntakeForm.module.css";
 
@@ -38,13 +45,33 @@ const GROUP_OPTIONS: { value: NonNullable<ClientPrefs["group_composition"]>; lab
   { value: "solo", label: "Solo" },
 ];
 
-const LODGING_OPTIONS: { value: NonNullable<ClientPrefs["lodging_tier"]>; label: string }[] = [
-  { value: "budget", label: "Budget" },
-  { value: "comfort", label: "Comfort" },
-  { value: "premium", label: "Premium" },
-];
+// The client no longer picks a lodging level — the budget defines it. This
+// copy explains the band a given budget-per-day unlocks (shown under the
+// budget field), so the derivation is transparent.
+const TIER_COPY: Record<LodgingTier, { label: string; desc: string }> = {
+  budget: { label: "Budget", desc: "guesthouses & simple stays" },
+  comfort: { label: "Comfort", desc: "mid-range hotels & boutique stays" },
+  premium: { label: "Premium", desc: "upscale & premium lodging" },
+};
 
 const STEPS = ["The basics", "Preferences", "Your voice"];
+
+// Flight times are approximate, so we offer a dropdown in fixed steps instead
+// of free typing. Value stays "HH:MM" (24h) for the backend; label is 12h.
+// Flip TIME_STEP_MIN to 15 for finer granularity.
+const TIME_STEP_MIN = 30;
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+  const out: { value: string; label: string }[] = [];
+  for (let m = 0; m < 24 * 60; m += TIME_STEP_MIN) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    const value = `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+    const ampm = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    out.push({ value, label: `${h12}:${String(min).padStart(2, "0")} ${ampm}` });
+  }
+  return out;
+})();
 
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
@@ -61,7 +88,6 @@ interface FormState {
   pace: NonNullable<ClientPrefs["pace"]> | "";
   mornings: NonNullable<ClientPrefs["mornings"]> | "";
   group_composition: NonNullable<ClientPrefs["group_composition"]> | "";
-  lodging_tier: NonNullable<ClientPrefs["lodging_tier"]> | "";
   free_text: string;
   name: string;
   email: string;
@@ -78,7 +104,6 @@ const EMPTY: FormState = {
   pace: "",
   mornings: "",
   group_composition: "",
-  lodging_tier: "",
   free_text: "",
   name: "",
   email: "",
@@ -128,13 +153,36 @@ export default function IntakeForm() {
     [form]
   );
 
+  // Budget → lodging band, computed live for the hint under the budget field.
+  // Needs valid dates + a positive budget; otherwise nothing is shown.
+  const budgetRange = useMemo(() => {
+    const budget = Number(form.budget_total);
+    const travelers = Number(form.travelers);
+    if (
+      !form.arrival_date ||
+      !form.departure_date ||
+      form.departure_date < form.arrival_date ||
+      !(budget > 0) ||
+      !(travelers >= 1)
+    ) {
+      return null;
+    }
+    const span = tripSpanDays(form.arrival_date, form.departure_date);
+    if (span > MAX_TRIP_SPAN_DAYS) return null;
+    return {
+      span,
+      perDay: budgetPerDay(span, budget),
+      tier: tierForBudget(span, budget, travelers),
+      low: isBudgetLow(span, budget, travelers),
+    };
+  }, [form.arrival_date, form.departure_date, form.budget_total, form.travelers]);
+
   const step2Valid = useMemo(
     () =>
       form.interests.length > 0 &&
       !!form.pace &&
       !!form.mornings &&
-      !!form.group_composition &&
-      !!form.lodging_tier,
+      !!form.group_composition,
     [form]
   );
 
@@ -144,20 +192,6 @@ export default function IntakeForm() {
     setError(null);
     if (!step1Valid || !step2Valid || !step3Valid) {
       setError("Please complete every step before submitting.");
-      return;
-    }
-   if (!step1Valid || !step2Valid || !step3Valid) {
-      setError("Please complete every step before submitting.");
-      return;
-    }
-    // Budget floor — tier is known by now (step 2). Mirror the server check.
-    const span = tripSpanDays(form.arrival_date, form.departure_date);
-    const tier = form.lodging_tier || "budget";
-    const minBudget = minBudgetFor(span, tier);
-    if (Number(form.budget_total) < minBudget) {
-      setError(
-        `For a ${span + 1}-day trip at ${tier} lodging, the minimum budget is $${minBudget.toLocaleString()}.`
-      );
       return;
     }
     setSubmitting(true);
@@ -183,7 +217,12 @@ export default function IntakeForm() {
       pace: form.pace || undefined,
       mornings: form.mornings || undefined,
       group_composition: form.group_composition || undefined,
-      lodging_tier: form.lodging_tier || undefined,
+      // Derived from the budget (the server re-derives authoritatively).
+      lodging_tier: tierForBudget(
+        tripSpanDays(form.arrival_date, form.departure_date),
+        Number(form.budget_total),
+        Number(form.travelers)
+      ),
       free_text: form.free_text,
     };
 
@@ -215,14 +254,14 @@ export default function IntakeForm() {
           <fieldset className={styles.fieldset}>
             <legend className={styles.stepTitle}>The basics</legend>
             <p className={styles.stepHint}>
-              The fixed points of your trip — dates, flights, party size and budget.
+              The fixed points of your trip: dates, flights, party size and budget.
             </p>
 
             <div className={styles.grid2}>
               <Field label="Arrival date">
                 <input
                   type="date"
-                  className={styles.input}
+                  className={`${styles.input} ${form.arrival_date ? "" : styles.inputEmpty}`}
                   min={today()}
                   value={form.arrival_date}
                   onChange={(e) => set("arrival_date", e.target.value)}
@@ -231,28 +270,44 @@ export default function IntakeForm() {
               <Field label="Departure date">
                 <input
                   type="date"
-                  className={styles.input}
+                  className={`${styles.input} ${form.departure_date ? "" : styles.inputEmpty}`}
                   min={form.arrival_date || today()}
                   max={form.arrival_date ? maxDepartureDate(form.arrival_date) : undefined}
                   value={form.departure_date}
                   onChange={(e) => set("departure_date", e.target.value)}
                 />
               </Field>
-              <Field label="Arrival flight time">
-                <input
-                  type="time"
-                  className={styles.input}
+              <Field label="Arrival flight time (approx.)">
+                <select
+                  className={`${styles.input} ${styles.select} ${form.arrival_time ? "" : styles.inputEmpty}`}
                   value={form.arrival_time}
                   onChange={(e) => set("arrival_time", e.target.value)}
-                />
+                >
+                  <option value="" disabled>
+                    Select a time
+                  </option>
+                  {TIME_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
               </Field>
-              <Field label="Departure flight time">
-                <input
-                  type="time"
-                  className={styles.input}
+              <Field label="Departure flight time (approx.)">
+                <select
+                  className={`${styles.input} ${styles.select} ${form.departure_time ? "" : styles.inputEmpty}`}
                   value={form.departure_time}
                   onChange={(e) => set("departure_time", e.target.value)}
-                />
+                >
+                  <option value="" disabled>
+                    Select a time
+                  </option>
+                  {TIME_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Travelers">
                 <input
@@ -278,6 +333,28 @@ export default function IntakeForm() {
                 </div>
               </Field>
             </div>
+            {budgetRange && (
+              <p
+                className={`${styles.rangeHint} ${
+                  budgetRange.low ? styles.rangeHintLow : ""
+                }`}
+              >
+                {budgetRange.low ? (
+                  <>
+                    About ${Math.round(budgetRange.perDay).toLocaleString()}/day,
+                    a little low for a {budgetRange.span + 1}-day trip. We’ll
+                    try, but options may be limited.
+                  </>
+                ) : (
+                  <>
+                    About ${Math.round(budgetRange.perDay).toLocaleString()}/day,
+                    so we’ll aim for{" "}
+                    <strong>{TIER_COPY[budgetRange.tier].label}</strong> stays (
+                    {TIER_COPY[budgetRange.tier].desc}).
+                  </>
+                )}
+              </p>
+            )}
             {form.arrival_date &&
               form.departure_date &&
               form.departure_date < form.arrival_date && (
@@ -354,24 +431,14 @@ export default function IntakeForm() {
               </div>
             </div>
 
-            <div className={styles.grid2}>
-              <div className={styles.block}>
-                <span className={styles.blockLabel}>Group</span>
-                <Segmented
-                  options={GROUP_OPTIONS}
-                  value={form.group_composition}
-                  onChange={(v) => set("group_composition", v)}
-                  wrap
-                />
-              </div>
-              <div className={styles.block}>
-                <span className={styles.blockLabel}>Lodging level</span>
-                <Segmented
-                  options={LODGING_OPTIONS}
-                  value={form.lodging_tier}
-                  onChange={(v) => set("lodging_tier", v)}
-                />
-              </div>
+            <div className={styles.block}>
+              <span className={styles.blockLabel}>Group</span>
+              <Segmented
+                options={GROUP_OPTIONS}
+                value={form.group_composition}
+                onChange={(v) => set("group_composition", v)}
+                wrap
+              />
             </div>
           </fieldset>
         )}
@@ -381,7 +448,7 @@ export default function IntakeForm() {
             <legend className={styles.stepTitle}>Your voice</legend>
             <p className={styles.stepHint}>
               Tell us what matters to you. Whether it’s a special occasion, a
-              passion, a dietary preference, or something you’d rather avoid — we’d
+              passion, a dietary preference, or something you’d rather avoid. We’d
               love to shape every detail around you.
             </p>
 
@@ -406,7 +473,7 @@ export default function IntakeForm() {
                   onChange={(e) => set("name", e.target.value)}
                 />
               </Field>
-              <Field label="Email — where we’ll send your itineraries">
+              <Field label="Email for your itineraries">
                 <input
                   type="email"
                   className={styles.input}
@@ -547,7 +614,7 @@ function BuildingState({ email, token }: { email: string; token: string | null }
         </p>
         <p className={styles.buildingBody}>
           We’ll email <strong>{email}</strong> the moment your itineraries are
-          ready — usually within a few minutes. You can close this page.
+          ready, usually within a few minutes. You can close this page.
         </p>
         {token && (
           <a className={styles.buildingLink} href={`/status/${token}`}>

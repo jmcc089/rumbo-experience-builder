@@ -51,14 +51,14 @@ export default async function ProposalsPage({ params }: { params: Promise<{ toke
           <StatePanel
             eyebrow="Still building"
             title="Your itineraries aren’t ready yet"
-            body="Our coordinators are still confirming availability with local providers. We’ll email you the moment your three itineraries are ready — usually within a few minutes."
+            body="Our coordinators are still confirming availability with local providers. We’ll email you the moment your three itineraries are ready, usually within a few minutes."
           />
         )}
         {view.status === "expired" && (
           <StatePanel
             eyebrow="Hold released"
             title="These options have expired"
-            body="Held itineraries are reserved for 15 minutes so providers can plan. This hold has passed — but starting again takes only a moment, and we’ll rebuild fresh options around the same preferences."
+            body="Held itineraries are reserved for 15 minutes so providers can plan. This hold has passed, but starting again takes only a moment, and we’ll rebuild fresh options around the same preferences."
             cta={{ href: "/", label: "Start a new request" }}
           />
         )}
