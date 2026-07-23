@@ -37,7 +37,7 @@ export default async function ProvidersPage() {
           <h2 className={styles.sectionTitle}>Current catalog</h2>
         </div>
         <div className={styles.panel}>
-          <SupplyLists experiences={catalog.experiences} lodging={catalog.lodging} />
+          <SupplyLists experiences={catalog.experiences} lodging={catalog.lodging} zones={zones} />
         </div>
       </section>
     </>

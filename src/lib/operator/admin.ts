@@ -29,18 +29,27 @@ export async function getZones(): Promise<ZoneOption[]> {
 
 export interface ExperienceCatalogRow {
   id: string;
+  provider_id: string;
   name: string;
   provider_name: string;
+  zone_id: string;
   zone_name: string;
   category: string;
   net_price: number;
+  duration_min: number;
+  open_from: string;
+  open_to: string;
+  capacity_per_slot: number;
+  dependency: string | null;
 }
 export interface LodgingCatalogRow {
   id: string;
   name: string;
+  zone_id: string;
   zone_name: string;
   tier: string;
   net_price_per_night: number;
+  capacity: number;
 }
 
 /** The existing supply, shown above the add form so the operator isn't blind. */
@@ -51,7 +60,8 @@ export async function getSupplyCatalog(): Promise<{
   const pool = getPool();
   const [exp, lodge] = await Promise.all([
     pool.query(
-      `SELECT e.id, e.name, e.category, e.net_price,
+      `SELECT e.id, e.provider_id, e.name, e.category, e.net_price, e.zone_id,
+              e.duration_min, e.open_from, e.open_to, e.capacity_per_slot, e.dependency,
               p.name AS provider_name, z.name AS zone_name
        FROM experiences e
        JOIN providers p ON p.id = e.provider_id
@@ -59,27 +69,37 @@ export async function getSupplyCatalog(): Promise<{
        ORDER BY z.name, e.name`
     ),
     pool.query(
-      `SELECT l.id, l.name, l.tier, l.net_price_per_night, z.name AS zone_name
+      `SELECT l.id, l.name, l.tier, l.net_price_per_night, l.capacity, l.zone_id, z.name AS zone_name
        FROM lodging l
        JOIN zones z ON z.id = l.zone_id
        ORDER BY z.name, l.name`
     ),
   ]);
+  const hhmm = (t: unknown) => String(t ?? "").slice(0, 5);
   return {
     experiences: exp.rows.map((r) => ({
       id: r.id,
+      provider_id: r.provider_id,
       name: r.name,
       provider_name: r.provider_name,
+      zone_id: r.zone_id,
       zone_name: r.zone_name,
       category: r.category,
       net_price: Number(r.net_price),
+      duration_min: Number(r.duration_min),
+      open_from: hhmm(r.open_from),
+      open_to: hhmm(r.open_to),
+      capacity_per_slot: Number(r.capacity_per_slot),
+      dependency: r.dependency ?? null,
     })),
     lodging: lodge.rows.map((r) => ({
       id: r.id,
       name: r.name,
+      zone_id: r.zone_id,
       zone_name: r.zone_name,
       tier: r.tier,
       net_price_per_night: Number(r.net_price_per_night),
+      capacity: Number(r.capacity),
     })),
   };
 }
@@ -335,6 +355,143 @@ export async function updateCustomer(id: string, input: CustomerUpdate): Promise
     );
     if (!rowCount) return { ok: false, message: "Customer not found." };
     return { ok: true, message: "Customer updated." };
+  } catch (err) {
+    return { ok: false, message: `Could not save: ${(err as Error).message}` };
+  }
+}
+
+export interface ExperienceUpdate {
+  name: string;
+  zone_id: string;
+  category: string;
+  duration_min: number;
+  open_from: string;
+  open_to: string;
+  net_price: number;
+  capacity_per_slot: number;
+  dependency: string | null;
+}
+
+/**
+ * Edits an existing experience business (its `experiences` row plus the linked
+ * `providers` name). Changing the zone re-places the pin at the new zone's
+ * centroid so the map stays consistent. Same engine invariants as on create.
+ */
+export async function updateExperience(id: string, input: ExperienceUpdate): Promise<CreateResult> {
+  const name = input.name.trim();
+  if (!name) return { ok: false, message: "Business name is required." };
+  if (!input.zone_id) return { ok: false, message: "Please choose a zone." };
+  if (!EXPERIENCE_CATEGORIES.includes(input.category as never))
+    return { ok: false, message: "Invalid category." };
+  if (input.dependency && !DEPENDENCIES.includes(input.dependency as never))
+    return { ok: false, message: "Invalid dependency." };
+  if (!(input.duration_min > 0)) return { ok: false, message: "Duration must be positive." };
+  if (!(input.net_price >= 0)) return { ok: false, message: "Price must be zero or more." };
+  if (!(input.capacity_per_slot > 0)) return { ok: false, message: "Capacity must be positive." };
+
+  const from = toMinutes(input.open_from);
+  const to = toMinutes(input.open_to);
+  if (from == null || to == null) return { ok: false, message: "Invalid open/close time." };
+  if (to <= from) return { ok: false, message: "Closing time must be after opening time." };
+  if (to - from < input.duration_min)
+    return { ok: false, message: "The open window is shorter than the activity duration." };
+
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `SELECT provider_id, zone_id FROM experiences WHERE id = $1`,
+      [id]
+    );
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return { ok: false, message: "Experience not found." };
+    }
+    const providerId = rows[0].provider_id as string;
+    const zoneChanged = rows[0].zone_id !== input.zone_id;
+
+    await client.query(
+      `UPDATE experiences
+         SET name = $2, category = $3, zone_id = $4, duration_min = $5,
+             open_from = $6, open_to = $7, net_price = $8, capacity_per_slot = $9, dependency = $10
+       WHERE id = $1`,
+      [
+        id,
+        name,
+        input.category,
+        input.zone_id,
+        input.duration_min,
+        input.open_from,
+        input.open_to,
+        input.net_price,
+        input.capacity_per_slot,
+        input.dependency,
+      ]
+    );
+
+    if (zoneChanged) {
+      const { lat, lng } = await placeInZone(input.zone_id);
+      await client.query(
+        `UPDATE providers SET name = $2, zone_id = $3, lat = $4, lng = $5 WHERE id = $1`,
+        [providerId, name, input.zone_id, lat, lng]
+      );
+    } else {
+      await client.query(`UPDATE providers SET name = $2 WHERE id = $1`, [providerId, name]);
+    }
+
+    await client.query("COMMIT");
+    return { ok: true, message: "Experience updated." };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return { ok: false, message: `Could not save: ${(err as Error).message}` };
+  } finally {
+    client.release();
+  }
+}
+
+export interface LodgingUpdate {
+  name: string;
+  zone_id: string;
+  tier: string;
+  net_price_per_night: number;
+  capacity: number;
+}
+
+/** Edits an existing lodging. Changing the zone re-places its pin. */
+export async function updateLodging(id: string, input: LodgingUpdate): Promise<CreateResult> {
+  const name = input.name.trim();
+  if (!name) return { ok: false, message: "Lodging name is required." };
+  if (!input.zone_id) return { ok: false, message: "Please choose a zone." };
+  if (!LODGING_TIERS.includes(input.tier as never))
+    return { ok: false, message: "Invalid tier." };
+  if (!(input.net_price_per_night >= 0))
+    return { ok: false, message: "Price must be zero or more." };
+  if (!(input.capacity > 0)) return { ok: false, message: "Capacity must be positive." };
+
+  const pool = getPool();
+  try {
+    const cur = await pool.query(`SELECT zone_id FROM lodging WHERE id = $1`, [id]);
+    if (!cur.rows.length) return { ok: false, message: "Lodging not found." };
+    const zoneChanged = cur.rows[0].zone_id !== input.zone_id;
+
+    if (zoneChanged) {
+      const { lat, lng } = await placeInZone(input.zone_id);
+      await pool.query(
+        `UPDATE lodging
+           SET name = $2, zone_id = $3, tier = $4, net_price_per_night = $5, capacity = $6, lat = $7, lng = $8
+         WHERE id = $1`,
+        [id, name, input.zone_id, input.tier, input.net_price_per_night, input.capacity, lat, lng]
+      );
+    } else {
+      await pool.query(
+        `UPDATE lodging
+           SET name = $2, zone_id = $3, tier = $4, net_price_per_night = $5, capacity = $6
+         WHERE id = $1`,
+        [id, name, input.zone_id, input.tier, input.net_price_per_night, input.capacity]
+      );
+    }
+    return { ok: true, message: "Lodging updated." };
   } catch (err) {
     return { ok: false, message: `Could not save: ${(err as Error).message}` };
   }
