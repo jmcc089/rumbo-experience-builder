@@ -31,8 +31,15 @@ export default async function ProvidersPage() {
         </div>
       </section>
 
-      {/* Existing supply — toggle between the two lists */}
-      <SupplyLists experiences={catalog.experiences} lodging={catalog.lodging} />
+      {/* Existing supply — selector + list in a single card */}
+      <section className={`${styles.section} ${styles.sectionStacked}`}>
+        <div className={styles.sectionHead}>
+          <h2 className={styles.sectionTitle}>Current catalog</h2>
+        </div>
+        <div className={styles.panel}>
+          <SupplyLists experiences={catalog.experiences} lodging={catalog.lodging} />
+        </div>
+      </section>
     </>
   );
 }

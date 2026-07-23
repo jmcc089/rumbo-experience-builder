@@ -6,11 +6,13 @@
   background: var(--offwhite);
 }
 
-/* Top bar — full-width cobalt band, sticky above the sidebar + content. */
+/* Top bar — full-width cobalt band, fixed above the sidebar + content. */
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 30;
+  left: 0;
+  right: 0;
+  z-index: 40;
   background: var(--cobalt);
   color: #fff;
 }
@@ -39,6 +41,7 @@
 
 .body {
   display: block;
+  padding-top: 58px; /* clears the fixed topbar */
 }
 
 /* A real sidebar: fixed full-height column pinned to the left under the topbar,
@@ -196,6 +199,10 @@
   border-radius: var(--radius-lg);
   overflow-x: auto;
   box-shadow: var(--shadow-soft);
+}
+/* Table sitting flush inside a panel: no card of its own. */
+.tableFlush {
+  overflow-x: auto;
 }
 .table {
   width: 100%;

@@ -19,7 +19,7 @@ export default function SupplyLists({
   const [tab, setTab] = useState<"experiences" | "lodging">("experiences");
 
   return (
-    <section className={styles.section}>
+    <>
       <div className={styles.segmented} role="tablist" style={{ marginBottom: 18 }}>
         <button
           type="button"
@@ -47,7 +47,7 @@ export default function SupplyLists({
             <p className={styles.emptyTitle}>No experiences yet</p>
           </div>
         ) : (
-          <div className={styles.tableWrap}>
+          <div className={styles.tableFlush}>
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -80,7 +80,7 @@ export default function SupplyLists({
           <p className={styles.emptyTitle}>No lodging yet</p>
         </div>
       ) : (
-        <div className={styles.tableWrap}>
+        <div className={styles.tableFlush}>
           <table className={styles.table}>
             <thead>
               <tr>
@@ -106,6 +106,6 @@ export default function SupplyLists({
           </table>
         </div>
       )}
-    </section>
+    </>
   );
 }

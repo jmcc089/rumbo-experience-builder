@@ -58,7 +58,7 @@ export default async function OperatorPage() {
       </section>
 
       {/* Provider response panel */}
-      <section className={styles.section}>
+      <section className={`${styles.section} ${styles.sectionStacked}`}>
         <div className={styles.sectionHead}>
           <h2 className={styles.sectionTitle}>Provider responses</h2>
         </div>
