@@ -95,6 +95,12 @@ export async function markItemDisrupted(orderItemId: string): Promise<void> {
   await pool.query(`UPDATE order_items SET status = 'disrupted' WHERE id = $1`, [orderItemId]);
 }
 
+/** Undo a disruption (used when a repair fails, so no permanent gap is left). */
+export async function markItemBooked(orderItemId: string): Promise<void> {
+  const pool = getPool();
+  await pool.query(`UPDATE order_items SET status = 'booked' WHERE id = $1`, [orderItemId]);
+}
+
 export interface RequestContext {
   request_id: string;
   arrival_date: string;

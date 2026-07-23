@@ -1,9 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { recordProviderResponse } from "@/lib/provider";
+import { recordProviderResponse, getProviderBookings } from "@/lib/provider";
+import { reportDropoutAndRepair } from "@/lib/repair";
 
 export type RespondResult = { ok: true } | { ok: false; error: string };
+
+export type DeliverResult =
+  | { ok: true; repaired: true; newService: string | null }
+  | { ok: true; repaired: false; reason: string }
+  | { ok: false; error: string };
 
 /**
  * Provider confirm/decline. The NET rate is re-derived server-side inside
@@ -26,6 +32,36 @@ export async function respondToRequest(
     return { ok: true };
   } catch (err) {
     console.error(`[provider] respondToRequest failed for ${providerId}:`, err);
+    return { ok: false, error: "error" };
+  }
+}
+
+/**
+ * Provider reports they can no longer deliver a booked service. Guards that the
+ * order item really belongs to the acting provider, then hands off to the
+ * repair engine to re-solve that day of the paid itinerary.
+ */
+export async function reportCannotDeliver(
+  providerId: string,
+  orderItemId: string,
+  orderId: string
+): Promise<DeliverResult> {
+  if (!providerId || !orderItemId || !orderId) {
+    return { ok: false, error: "missing_fields" };
+  }
+  try {
+    const bookings = await getProviderBookings(providerId);
+    const owned = bookings.some((b) => b.orderItemId === orderItemId && b.orderId === orderId);
+    if (!owned) return { ok: false, error: "not_owned" };
+
+    const outcome = await reportDropoutAndRepair(orderId, orderItemId);
+    revalidatePath("/provider");
+    if (outcome.repaired) {
+      return { ok: true, repaired: true, newService: null };
+    }
+    return { ok: true, repaired: false, reason: outcome.reason ?? "No replacement found" };
+  } catch (err) {
+    console.error(`[provider] reportCannotDeliver failed for ${providerId}:`, err);
     return { ok: false, error: "error" };
   }
 }

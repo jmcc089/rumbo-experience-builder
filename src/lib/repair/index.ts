@@ -17,6 +17,7 @@ import {
   getDisruptibleItems,
   getRequestContextForOrder,
   markItemDisrupted,
+  markItemBooked,
   applyRepair,
   DisruptibleItem,
 } from "./store";
@@ -153,4 +154,23 @@ export async function repairOrder(orderId: string): Promise<RepairOutcome> {
     dayIndex: disruptedItem.day_index,
     newClientTotal: result.replacement.client_total,
   };
+}
+
+/**
+ * Provider-initiated dropout: a specific booked item is marked disrupted and
+ * the day is re-solved. This is the entry point the provider portal uses when
+ * a provider reports they can no longer deliver a booked service. If no valid
+ * replacement is found the item is restored to 'booked' so the paid itinerary
+ * is never left with a permanent hole.
+ */
+export async function reportDropoutAndRepair(
+  orderId: string,
+  orderItemId: string
+): Promise<RepairOutcome> {
+  await markItemDisrupted(orderItemId);
+  const outcome = await repairOrder(orderId);
+  if (!outcome.repaired) {
+    await markItemBooked(orderItemId);
+  }
+  return outcome;
 }

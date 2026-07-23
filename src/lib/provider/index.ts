@@ -12,6 +12,9 @@ import {
   getActiveRequests,
   getProvider,
   getProviderExperiences,
+  getProviderBookedServices,
+  getProviderCatalog,
+  getProviderProfile,
   getResponsesForProvider,
   resolveResponse,
   listProviders,
@@ -62,14 +65,50 @@ export interface ProviderInbox {
   responseWindowMinutes: number;
 }
 
-export type { ProviderRow };
-export { listProviders };
+export type { ProviderRow, ProviderExperienceRow, ProviderProfileRow } from "./store";
+export { listProviders, getProviderCatalog, getProviderProfile };
 
 function ticketRef(requestId: string, experienceId: string): string {
   // A short, stable, non-sensitive reference for the card header.
   const a = requestId.replace(/-/g, "").slice(0, 4).toUpperCase();
   const b = experienceId.replace(/[^a-z0-9]/gi, "").slice(-3).toUpperCase();
   return `RQ-${a}-${b}`;
+}
+
+function addDaysIso(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A confirmed, paid job the provider must deliver, shown in "Booked services". */
+export interface BookedService {
+  orderItemId: string;
+  orderId: string;
+  ticket: string;
+  serviceName: string;
+  date: string; // 'YYYY-MM-DD' — arrival day + day_index
+  time: string; // 'HH:MM' — the experience's opening slot
+  travelers: number;
+  netRateTotal: number; // what Rumbo pays the provider for the group
+}
+
+/**
+ * The acting provider's real delivery schedule: experiences that a client
+ * actually chose and paid for. Ordered soonest first. NET rate only.
+ */
+export async function getProviderBookings(providerId: string): Promise<BookedService[]> {
+  const rows = await getProviderBookedServices(providerId);
+  return rows.map((r) => ({
+    orderItemId: r.order_item_id,
+    orderId: r.order_id,
+    ticket: ticketRef(r.order_id, r.experience_id),
+    serviceName: r.service_name,
+    date: addDaysIso(r.arrival_date, r.day_index),
+    time: r.open_from.slice(0, 5),
+    travelers: r.travelers,
+    netRateTotal: r.net_price,
+  }));
 }
 
 /**

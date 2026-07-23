@@ -487,3 +487,196 @@ export async function updateLodging(id: string, input: LodgingUpdate): Promise<C
     return { ok: false, message: `Could not save: ${(err as Error).message}` };
   }
 }
+
+// ─── Provider-portal writes ───────────────────────────────────────────────────
+// A business editing its OWN catalog from the provider portal. Scoped to a
+// single provider_id: adding/editing experiences never renames the parent
+// provider (a provider can list several), and the profile edit touches the
+// providers row + its personalization.
+
+export interface ProviderExperienceInput {
+  name: string;
+  zone_id: string;
+  category: string;
+  duration_min: number;
+  open_days: string[];
+  open_from: string;
+  open_to: string;
+  net_price: number;
+  capacity_per_slot: number;
+  dependency: string | null;
+}
+
+function validateExperienceInput(input: ProviderExperienceInput): string | null {
+  if (!input.name.trim()) return "Experience name is required.";
+  if (!input.zone_id) return "Please choose a zone.";
+  if (!EXPERIENCE_CATEGORIES.includes(input.category as never)) return "Invalid category.";
+  if (input.dependency && !DEPENDENCIES.includes(input.dependency as never))
+    return "Invalid dependency.";
+  if (!input.open_days.length) return "Select at least one open day.";
+  if (!(input.duration_min > 0)) return "Duration must be positive.";
+  if (!(input.net_price >= 0)) return "Price must be zero or more.";
+  if (!(input.capacity_per_slot > 0)) return "Capacity must be positive.";
+  const from = toMinutes(input.open_from);
+  const to = toMinutes(input.open_to);
+  if (from == null || to == null) return "Invalid open/close time.";
+  if (to <= from) return "Closing time must be after opening time.";
+  if (to - from < input.duration_min)
+    return "The open window is shorter than the activity duration.";
+  return null;
+}
+
+/** Add a new experience under an existing provider (no new provider row). */
+export async function addExperienceToProvider(
+  providerId: string,
+  input: ProviderExperienceInput
+): Promise<CreateResult> {
+  const err = validateExperienceInput(input);
+  if (err) return { ok: false, message: err };
+
+  const pool = getPool();
+  const prov = await pool.query(`SELECT 1 FROM providers WHERE id = $1`, [providerId]);
+  if (!prov.rows.length) return { ok: false, message: "Provider not found." };
+
+  const name = input.name.trim();
+  const experienceId = makeId("exp", name);
+  const openDaysCsv = DAYS.filter((d) => input.open_days.includes(d)).join(",");
+  try {
+    await pool.query(
+      `INSERT INTO experiences
+         (id, provider_id, name, category, zone_id, duration_min, open_days, open_from, open_to, net_price, capacity_per_slot, dependency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        experienceId,
+        providerId,
+        name,
+        input.category,
+        input.zone_id,
+        input.duration_min,
+        openDaysCsv,
+        input.open_from,
+        input.open_to,
+        input.net_price,
+        input.capacity_per_slot,
+        input.dependency,
+      ]
+    );
+    return { ok: true, message: `Added “${name}”.` };
+  } catch (e) {
+    return { ok: false, message: `Could not save: ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Edit one of a provider's experiences. Updates ONLY the experiences row, after
+ * guarding that the experience really belongs to this provider — the parent
+ * provider is never renamed here.
+ */
+export async function updateProviderExperience(
+  providerId: string,
+  experienceId: string,
+  input: ProviderExperienceInput
+): Promise<CreateResult> {
+  const err = validateExperienceInput(input);
+  if (err) return { ok: false, message: err };
+
+  const pool = getPool();
+  const owned = await pool.query(
+    `SELECT 1 FROM experiences WHERE id = $1 AND provider_id = $2`,
+    [experienceId, providerId]
+  );
+  if (!owned.rows.length) return { ok: false, message: "Experience not found." };
+
+  const openDaysCsv = DAYS.filter((d) => input.open_days.includes(d)).join(",");
+  try {
+    await pool.query(
+      `UPDATE experiences
+         SET name = $2, category = $3, zone_id = $4, duration_min = $5, open_days = $6,
+             open_from = $7, open_to = $8, net_price = $9, capacity_per_slot = $10, dependency = $11
+       WHERE id = $1`,
+      [
+        experienceId,
+        input.name.trim(),
+        input.category,
+        input.zone_id,
+        input.duration_min,
+        openDaysCsv,
+        input.open_from,
+        input.open_to,
+        input.net_price,
+        input.capacity_per_slot,
+        input.dependency,
+      ]
+    );
+    return { ok: true, message: "Experience updated." };
+  } catch (e) {
+    return { ok: false, message: `Could not save: ${(e as Error).message}` };
+  }
+}
+
+export interface ProviderProfileInput {
+  name: string;
+  zone_id: string;
+  special_occasions: string;
+  dietary_options: string;
+  privacy_options: string;
+  extras_on_request: string;
+}
+
+/**
+ * Edit a provider's own profile: name, location (zone), and personalization.
+ * Changing the zone re-places the map pin. Personalization is upserted.
+ */
+export async function updateProviderProfile(
+  providerId: string,
+  input: ProviderProfileInput
+): Promise<CreateResult> {
+  const name = input.name.trim();
+  if (!name) return { ok: false, message: "Name is required." };
+  if (!input.zone_id) return { ok: false, message: "Please choose a zone." };
+
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const cur = await client.query(`SELECT zone_id FROM providers WHERE id = $1`, [providerId]);
+    if (!cur.rows.length) {
+      await client.query("ROLLBACK");
+      return { ok: false, message: "Provider not found." };
+    }
+    const zoneChanged = cur.rows[0].zone_id !== input.zone_id;
+    if (zoneChanged) {
+      const { lat, lng } = await placeInZone(input.zone_id);
+      await client.query(
+        `UPDATE providers SET name = $2, zone_id = $3, lat = $4, lng = $5 WHERE id = $1`,
+        [providerId, name, input.zone_id, lat, lng]
+      );
+    } else {
+      await client.query(`UPDATE providers SET name = $2 WHERE id = $1`, [providerId, name]);
+    }
+    await client.query(
+      `INSERT INTO provider_personalization
+         (provider_id, special_occasions, dietary_options, privacy_options, extras_on_request)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (provider_id) DO UPDATE SET
+         special_occasions = EXCLUDED.special_occasions,
+         dietary_options = EXCLUDED.dietary_options,
+         privacy_options = EXCLUDED.privacy_options,
+         extras_on_request = EXCLUDED.extras_on_request`,
+      [
+        providerId,
+        input.special_occasions || null,
+        input.dietary_options || null,
+        input.privacy_options || null,
+        input.extras_on_request || null,
+      ]
+    );
+    await client.query("COMMIT");
+    return { ok: true, message: "Profile updated." };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    return { ok: false, message: `Could not save: ${(e as Error).message}` };
+  } finally {
+    client.release();
+  }
+}

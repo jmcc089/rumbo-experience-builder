@@ -10,14 +10,17 @@
   background: var(--offwhite);
 }
 
-/* Top bar — thin cobalt band, no marketing nav. */
+/* Top bar — full-width cobalt band, fixed above the sidebar + content. */
 .topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
   background: var(--cobalt);
   color: #fff;
 }
 .topbarInner {
-  max-width: 960px;
-  margin: 0 auto;
   padding: 0 24px;
   height: 58px;
   display: flex;
@@ -40,10 +43,104 @@
   border-left: 1px solid rgba(255, 255, 255, 0.28);
 }
 
+.body {
+  display: block;
+  padding-top: 58px; /* clears the fixed topbar */
+}
+
+/* Fixed full-height sidebar, same pattern as the operator portal. Holds the
+   "Viewing as" demo switcher and the section nav. */
+.sidebar {
+  position: fixed;
+  top: 58px;
+  left: 0;
+  bottom: 0;
+  width: 250px;
+  background: var(--pale);
+  border-right: 1px solid var(--pale-line);
+  padding: 0 0 14px;
+  overflow-y: auto;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+/* "Viewing as" — the simulated provider switcher, pinned to the sidebar foot. */
+.actingAs {
+  margin-top: auto;
+  padding: 16px 18px 4px;
+  border-top: 1px solid var(--pale-line);
+}
+.actingAsLabel {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 8px;
+}
+.actingAsSelect {
+  appearance: none;
+  width: 100%;
+  background: #fff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%235b6577' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    no-repeat right 12px center;
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius);
+  padding: 9px 32px 9px 12px;
+  font-size: 14px;
+  color: var(--navy);
+  cursor: pointer;
+}
+.actingAsSelect:hover {
+  border-color: var(--cobalt);
+}
+.actingAsNote {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 10px;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+}
+.navLink {
+  display: block;
+  padding: 13px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.navLink:hover {
+  background: rgba(15, 71, 175, 0.08);
+  color: var(--navy);
+}
+.navLinkActive,
+.navLinkActive:hover {
+  background: var(--cobalt);
+  color: #fff;
+}
+
 .main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 28px 24px 72px;
+  margin-left: 250px; /* clears the fixed sidebar */
+  min-width: 0;
+  padding: 28px 40px 72px;
+}
+.pageHead {
+  margin-bottom: 22px;
+}
+.pageTitle {
+  font-size: 30px;
+  color: var(--navy);
+}
+.pageSub {
+  font-size: 15px;
+  color: var(--muted);
+  margin-top: 4px;
 }
 
 /* Acting-as context bar */
@@ -117,6 +214,13 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
+  margin-bottom: 8px;
+}
+.sectionSub {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 640px;
   margin-bottom: 16px;
 }
 .sectionTitle {
@@ -314,6 +418,49 @@
   color: #a23a2b;
 }
 
+/* Booked services */
+.bookedTag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--positive);
+  background: var(--positive-soft);
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.confirmBlock {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.confirmNote {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.confirmBlock .actions {
+  margin-top: 0;
+}
+.keepBtn {
+  flex: 1;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--navy);
+  color: #fff;
+  transition: background 0.15s ease;
+}
+.keepBtn:hover:not(:disabled) {
+  background: #2a3a5c;
+}
+.keepBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Empty states */
 .emptyCard {
   background: #fff;
@@ -398,15 +545,191 @@
   color: var(--muted);
 }
 
+/* ─── Services / Information forms ─────────────────────────────────────────── */
+.panel {
+  background: #fff;
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-soft);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fieldWide {
+  grid-column: 1 / -1;
+}
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.input,
+.textarea {
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  font-size: 14px;
+  color: var(--navy);
+  font-family: inherit;
+  background: #fff;
+  width: 100%;
+}
+.textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--cobalt);
+}
+.dayRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dayChip {
+  border: 1px solid var(--pale-line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: capitalize;
+}
+.dayChipOn {
+  background: var(--cobalt);
+  border-color: var(--cobalt);
+  color: #fff;
+}
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.submitBtn {
+  background: var(--cobalt);
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cancelBtn {
+  background: transparent;
+  border: 1px solid var(--pale-line);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.formMsg {
+  font-size: 13px;
+  font-weight: 500;
+}
+.formMsgOk {
+  color: var(--positive);
+}
+.formMsgErr {
+  color: #a23a2b;
+}
+.formSubhead {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--navy);
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pale-line);
+}
+
+/* Experience list (Services) */
+.svcName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.svcMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 12px;
+}
+.svcMetaRow {
+  font-size: 13px;
+  color: var(--muted);
+}
+.svcPrice {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--positive);
+  margin-bottom: 16px;
+}
+.editBtn {
+  align-self: flex-start;
+  margin-top: auto;
+  background: #fff;
+  border: 1px solid var(--pale-line);
+  color: var(--muted);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.editBtn:hover {
+  border-color: var(--cobalt);
+  color: var(--cobalt);
+}
+
+@media (max-width: 900px) {
+  /* Sidebar collapses to a static bar above the content. */
+  .sidebar {
+    position: static;
+    top: auto;
+    width: auto;
+    bottom: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--pale-line);
+  }
+  .nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .main {
+    margin-left: 0;
+    padding: 20px;
+  }
+}
+
 @media (max-width: 560px) {
-  .contextBar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .select {
-    min-width: 0;
-    width: 100%;
-  }
   .cardGrid {
     grid-template-columns: 1fr;
   }
