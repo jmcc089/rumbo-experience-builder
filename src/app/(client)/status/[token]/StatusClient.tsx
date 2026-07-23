@@ -66,7 +66,7 @@ export default function StatusClient({
             <span className={styles.eyebrow}>Ready</span>
             <h1 className={styles.title}>Your itineraries are ready</h1>
             <p className={styles.body}>
-              Three complete trips are waiting for you. Opening them starts a 15-minute hold with our
+              Three complete trips are waiting for you. Opening them starts a one-hour hold with our
               providers, so have a moment to choose.
             </p>
             <Link href={`/proposals/${token}`} className={styles.cta}>
@@ -93,7 +93,7 @@ export default function StatusClient({
             <span className={styles.eyebrow}>Hold released</span>
             <h1 className={styles.title}>These options have expired</h1>
             <p className={styles.body}>
-              Held itineraries are reserved for 15 minutes. Starting again takes only a moment.
+              Held itineraries are reserved for one hour. Starting again takes only a moment.
             </p>
             <Link href="/" className={styles.cta}>
               Start a new request

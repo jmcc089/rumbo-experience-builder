@@ -19,6 +19,7 @@ function toDateString(value: string | Date): string {
 interface ClientRequestRow {
   id: string;
   token: string;
+  name: string | null;
   email: string;
   arrival_date: string | Date;
   departure_date: string | Date;
@@ -36,6 +37,8 @@ function toClientRequest(row: ClientRequestRow): ClientRequest {
   return {
     id: row.id,
     token: row.token,
+    // Older rows predate the column and carry the name inside prefs_json.
+    name: row.name ?? (row.prefs_json as ClientPrefs & { contact_name?: string })?.contact_name ?? "",
     email: row.email,
     arrival_date: toDateString(row.arrival_date),
     departure_date: toDateString(row.departure_date),
@@ -55,12 +58,13 @@ export async function insertClientRequest(intake: IntakeInput): Promise<{ id: st
   const token = generateToken();
   const { rows } = await pool.query(
     `INSERT INTO client_requests
-       (token, email, arrival_date, departure_date, arrival_time, departure_time,
+       (token, name, email, arrival_date, departure_date, arrival_time, departure_time,
         travelers, budget_total, prefs_json, free_text, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'building')
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'building')
      RETURNING id`,
     [
       token,
+      intake.name,
       intake.email,
       intake.arrival_date,
       intake.departure_date,
@@ -68,10 +72,9 @@ export async function insertClientRequest(intake: IntakeInput): Promise<{ id: st
       intake.departure_time,
       intake.travelers,
       intake.budget_total,
-      // The client's name is recorded alongside their preferences. There is no
-      // login in Rumbo, so `contact_name` in prefs_json is the record of who
-      // the request belongs to (kept here to avoid a schema migration; the
-      // engine ignores unknown keys in prefs_json).
+      // The name now has its own column. It is still mirrored into prefs_json
+      // as `contact_name` so existing readers keep working and the shape of
+      // prefs_json stays unchanged; the engine ignores unknown keys.
       JSON.stringify({ ...intake.prefs_json, contact_name: intake.name }),
       intake.free_text,
     ]
@@ -178,7 +181,7 @@ export async function getProposalCache(token: string): Promise<ProposalCacheRow 
 }
 
 /**
- * Starts the 15-minute hold on first read. Idempotent: a second call
+ * Starts the hold on first read. Idempotent: a second call
  * within the window does not reset the timer.
  */
 export async function markViewedIfFirst(token: string): Promise<ProposalCacheRow | null> {

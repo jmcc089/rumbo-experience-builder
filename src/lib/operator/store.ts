@@ -77,7 +77,8 @@ export interface RecentRequestRow {
 export async function getRecentRequests(limit = 12): Promise<RecentRequestRow[]> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT cr.id, cr.email, cr.prefs_json->>'contact_name' AS name,
+    `SELECT cr.id, cr.email,
+            COALESCE(cr.name, cr.prefs_json->>'contact_name') AS name,
             cr.arrival_date, cr.departure_date, cr.travelers,
             cr.status, cr.budget_total, cr.created_at,
             o.client_price

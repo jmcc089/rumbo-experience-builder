@@ -58,7 +58,7 @@ export default async function ProposalsPage({ params }: { params: Promise<{ toke
           <StatePanel
             eyebrow="Hold released"
             title="These options have expired"
-            body="Held itineraries are reserved for 15 minutes so providers can plan. This hold has passed, but starting again takes only a moment, and we’ll rebuild fresh options around the same preferences."
+            body="Held itineraries are reserved for one hour so providers can plan. This hold has passed, but starting again takes only a moment, and we’ll rebuild fresh options around the same preferences."
             cta={{ href: "/", label: "Start a new request" }}
           />
         )}

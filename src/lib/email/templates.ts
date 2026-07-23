@@ -64,7 +64,7 @@ export function proposalsReadyEmail(token: string): EmailContent {
     and book the one that feels right.</p>
     ${renderCtaButton("View my itineraries", link)}
     <p style="margin:14px 0 0 0; font-family:${T.SANS}; font-size:13px; line-height:1.5; color:${T.MUTED};">
-      Your options are held for 15 minutes once you open them, so you can decide without anyone else claiming your spots.
+      Your options are held for one hour once you open them, so you can decide without anyone else claiming your spots.
     </p>
   `;
   return {

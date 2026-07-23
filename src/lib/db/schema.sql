@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS providers (
   provider_type     text    NOT NULL,  -- 'formal' | 'informal'
   confirmation_mode text    NOT NULL,  -- 'instant' | 'on_request'
   reliability_score numeric NOT NULL,  -- 0–1
-  base_popularity   numeric NOT NULL   -- 0–1
+  base_popularity   numeric NOT NULL,  -- 0–1
+  lat               double precision,  -- coherent-but-fictional coords; drives the itinerary map pin
+  lng               double precision
 );
 
 CREATE TABLE IF NOT EXISTS experiences (
@@ -51,7 +53,9 @@ CREATE TABLE IF NOT EXISTS lodging (
   zone_id             text    NOT NULL REFERENCES zones(id),
   tier                text    NOT NULL,  -- 'budget'|'comfort'|'premium'
   net_price_per_night numeric NOT NULL,
-  capacity            integer NOT NULL
+  capacity            integer NOT NULL,
+  lat                 double precision,  -- coherent-but-fictional coords; drives the itinerary map pin
+  lng                 double precision
 );
 
 CREATE TABLE IF NOT EXISTS provider_personalization (
@@ -67,6 +71,7 @@ CREATE TABLE IF NOT EXISTS provider_personalization (
 CREATE TABLE IF NOT EXISTS client_requests (
   id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   token            text        NOT NULL UNIQUE,
+  name             text,                    -- contact name; also mirrored in prefs_json.contact_name
   email            text        NOT NULL,
   arrival_date     date        NOT NULL,
   departure_date   date        NOT NULL,
@@ -94,7 +99,7 @@ CREATE TABLE IF NOT EXISTS proposal_cache (
   token            text        NOT NULL UNIQUE,
   proposals_json   jsonb       NOT NULL,  -- ItinerarySnapshot[3]
   first_viewed_at  timestamptz,           -- set on first getProposals() call
-  expires_at       timestamptz,           -- first_viewed_at + 15 minutes
+  expires_at       timestamptz,           -- first_viewed_at + HOLD_WINDOW_MINUTES
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 

@@ -88,6 +88,7 @@ export type RequestStatus =
 export interface ClientRequest {
   id: string;
   token: string;
+  name: string;
   email: string;
   arrival_date: string;   // 'YYYY-MM-DD'
   departure_date: string; // 'YYYY-MM-DD'

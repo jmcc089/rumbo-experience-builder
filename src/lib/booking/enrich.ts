@@ -289,7 +289,7 @@ function enrichOne(snap: ItinerarySnapshot, index: number, arrivalDate: string, 
 
 /**
  * Loads and enriches the proposals for a token. Delegates to getProposals(),
- * which starts the 15-minute hold on first view. Handles the already-paid case
+ * which starts the hold on first view. Handles the already-paid case
  * by returning the booked itinerary so a reload after payment shows the
  * confirmation rather than the live options.
  */

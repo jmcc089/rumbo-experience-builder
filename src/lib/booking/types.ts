@@ -2,7 +2,7 @@
 import { ClientPrefs, ItinerarySnapshot } from "../types";
 import { OrderProviderInstructions } from "../llm";
 
-export const HOLD_WINDOW_MINUTES = 15;
+export const HOLD_WINDOW_MINUTES = 60;
 
 export interface IntakeInput {
   name: string;
