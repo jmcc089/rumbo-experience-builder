@@ -294,3 +294,48 @@ export async function createLodging(input: NewLodgingInput): Promise<CreateResul
     return { ok: false, message: `Could not save: ${(err as Error).message}` };
   }
 }
+
+export interface CustomerUpdate {
+  name: string;
+  email: string;
+  arrival_date: string;
+  departure_date: string;
+  travelers: number;
+  budget_total: number;
+}
+
+/**
+ * Updates a customer's contact + trip details from the Customers section.
+ * Keeps prefs_json.contact_name mirrored to the name column.
+ */
+export async function updateCustomer(id: string, input: CustomerUpdate): Promise<CreateResult> {
+  const name = input.name.trim();
+  const email = input.email.trim();
+  if (!name) return { ok: false, message: "Name is required." };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    return { ok: false, message: "Enter a valid email." };
+  if (!(input.travelers > 0)) return { ok: false, message: "Travelers must be positive." };
+  if (!(input.budget_total >= 0)) return { ok: false, message: "Budget must be zero or more." };
+  if (input.departure_date < input.arrival_date)
+    return { ok: false, message: "Departure can't be before arrival." };
+
+  const pool = getPool();
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE client_requests
+         SET name = $2,
+             email = $3,
+             arrival_date = $4,
+             departure_date = $5,
+             travelers = $6,
+             budget_total = $7,
+             prefs_json = jsonb_set(COALESCE(prefs_json, '{}'), '{contact_name}', to_jsonb($2::text))
+       WHERE id = $1`,
+      [id, name, email, input.arrival_date, input.departure_date, input.travelers, input.budget_total]
+    );
+    if (!rowCount) return { ok: false, message: "Customer not found." };
+    return { ok: true, message: "Customer updated." };
+  } catch (err) {
+    return { ok: false, message: `Could not save: ${(err as Error).message}` };
+  }
+}

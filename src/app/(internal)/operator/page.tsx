@@ -57,66 +57,13 @@ export default async function OperatorPage() {
         ))}
       </section>
 
-      <div className={styles.columns}>
-        {/* Recent requests table */}
-        <section className={styles.section}>
-          <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Recent requests</h2>
-            <span className={styles.count}>{requests.length}</span>
-          </div>
-
-          {requests.length === 0 ? (
-            <div className={styles.emptyCard}>
-              <p className={styles.emptyTitle}>No requests yet</p>
-              <p className={styles.emptySub}>Incoming client requests will appear here.</p>
-            </div>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Client</th>
-                    <th>Dates</th>
-                    <th className={styles.numCol}>Value</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((r) => (
-                    <tr key={r.id}>
-                      <td>
-                        <span className={styles.client}>{r.name || r.email}</span>
-                        <span className={styles.travelers}>
-                          {r.name ? `${r.email} · ` : ""}
-                          {r.travelers} {r.travelers === 1 ? "traveler" : "travelers"}
-                        </span>
-                      </td>
-                      <td className={styles.dates}>
-                        {formatRange(r.arrival_date, r.departure_date)}
-                      </td>
-                      <td className={styles.numCol}>
-                        <span className={styles.value}>{usd(r.value)}</span>
-                        <span className={styles.valueTag}>
-                          {r.is_paid_value ? "paid" : "budget"}
-                        </span>
-                      </td>
-                      <td>
-                        <StatusPill status={r.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* Provider response panel */}
-        <section className={styles.section}>
-          <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Provider responses</h2>
-          </div>
-          <div className={styles.panel}>
+      {/* Provider response panel */}
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <h2 className={styles.sectionTitle}>Provider responses</h2>
+        </div>
+        <div className={styles.panel}>
+          <div className={styles.panelRows}>
             <ProviderRow
               label="Formal"
               sub="Instant confirmation"
@@ -127,13 +74,66 @@ export default async function OperatorPage() {
               sub="On request"
               data={providerPanel.informal}
             />
-            <p className={styles.panelNote}>
-              Formal partners confirm instantly; informal partners are awaiting a
-              response until they reply through their portal.
-            </p>
           </div>
-        </section>
-      </div>
+          <p className={styles.panelNote}>
+            Formal partners confirm instantly; informal partners are awaiting a
+            response until they reply through their portal.
+          </p>
+        </div>
+      </section>
+
+      {/* Recent requests table */}
+      <section className={`${styles.section} ${styles.sectionStacked}`}>
+        <div className={styles.sectionHead}>
+          <h2 className={styles.sectionTitle}>Recent requests</h2>
+          <span className={styles.count}>{requests.length}</span>
+        </div>
+
+        {requests.length === 0 ? (
+          <div className={styles.emptyCard}>
+            <p className={styles.emptyTitle}>No requests yet</p>
+            <p className={styles.emptySub}>Incoming client requests will appear here.</p>
+          </div>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Dates</th>
+                  <th className={styles.numCol}>Value</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <span className={styles.client}>{r.name || r.email}</span>
+                      <span className={styles.travelers}>
+                        {r.name ? `${r.email} · ` : ""}
+                        {r.travelers} {r.travelers === 1 ? "traveler" : "travelers"}
+                      </span>
+                    </td>
+                    <td className={styles.dates}>
+                      {formatRange(r.arrival_date, r.departure_date)}
+                    </td>
+                    <td className={styles.numCol}>
+                      <span className={styles.value}>{usd(r.value)}</span>
+                      <span className={styles.valueTag}>
+                        {r.is_paid_value ? "paid" : "budget"}
+                      </span>
+                    </td>
+                    <td>
+                      <StatusPill status={r.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </>
   );
 }

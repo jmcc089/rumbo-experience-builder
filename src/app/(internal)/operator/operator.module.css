@@ -150,6 +150,23 @@
 .section {
   min-width: 0;
 }
+/* Stacked dashboard section: space it from the panel above. */
+.sectionStacked {
+  margin-top: 30px;
+}
+/* Two provider rows side by side inside the full-width panel. */
+.panelRows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-bottom: 4px;
+}
+@media (max-width: 720px) {
+  .panelRows {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
 .sectionHead {
   display: flex;
   align-items: baseline;
@@ -296,6 +313,17 @@
   border-top: 1px solid var(--pale-line);
   padding-top: 16px;
 }
+/* Side by side in the grid: no divider between columns. */
+.panelRows .provRow + .provRow {
+  border-top: none;
+  padding-top: 4px;
+}
+@media (max-width: 720px) {
+  .panelRows .provRow + .provRow {
+    border-top: 1px solid var(--pale-line);
+    padding-top: 16px;
+  }
+}
 .provHead {
   display: flex;
   align-items: flex-start;
@@ -394,24 +422,27 @@
   color: var(--muted);
 }
 
-/* Business-type toggle */
+/* Business-type toggle — fills the full width, options split evenly */
 .segmented {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   background: var(--pale);
   border-radius: 999px;
   padding: 3px;
   gap: 3px;
 }
 .segBtn {
+  flex: 1;
   border: none;
   background: transparent;
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
-  padding: 7px 20px;
+  padding: 8px 20px;
   border-radius: 999px;
   cursor: pointer;
   font-family: inherit;
+  text-align: center;
 }
 .segBtnActive {
   background: #fff;
@@ -506,6 +537,54 @@
 }
 .formMsgErr {
   color: #c0362c;
+}
+.cancelBtn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--pale-line);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Row edit (Customers) */
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--pale-line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.iconBtn:hover {
+  border-color: var(--cobalt);
+  color: var(--cobalt);
+  background: var(--pale);
+}
+.editRow > td {
+  background: var(--offwhite);
+  padding: 20px 16px;
+}
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.editGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
 }
 
 /* Empty state */
