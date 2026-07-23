@@ -7,7 +7,7 @@ import styles from "./operator.module.css";
 
 const LINKS = [
   { href: "/operator", label: "Dashboard", exact: true },
-  { href: "/operator/customers", label: "Customers", exact: false },
+  { href: "/operator/customers", label: "Orders", exact: false },
   { href: "/operator/providers", label: "Providers", exact: false },
 ];
 

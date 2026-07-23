@@ -595,6 +595,54 @@
   gap: 14px;
 }
 
+/* Cancel-order (hard delete) */
+.cancelOrderBtn {
+  background: transparent;
+  color: #c0362c;
+  border: 1px solid #e6c4c0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.cancelOrderBtn:hover {
+  background: #fbecea;
+  border-color: #c0362c;
+}
+.confirmRow > td {
+  background: #fdf3f2;
+  padding: 16px;
+}
+.confirmBox {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.confirmText {
+  font-size: 14px;
+  color: var(--navy);
+  font-weight: 500;
+}
+.dangerBtn {
+  background: #c0362c;
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dangerBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Empty state */
 .emptyCard {
   background: #fff;

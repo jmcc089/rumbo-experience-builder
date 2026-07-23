@@ -1,9 +1,10 @@
 "use client";
-// Customers table with an inline edit form per row. The edit button (last
-// column) expands an editable row; saving calls the editCustomer server action.
+// Orders table. Each row can be cancelled — and since this prototype has no
+// cancellation status or soft-delete flag, a cancel is a hard delete, so the
+// button opens a confirm step before calling the cancelOrder server action.
 import { useState, useTransition } from "react";
 import type { CustomerRow, RequestStatus } from "@/lib/operator";
-import { editCustomer } from "./actions";
+import { cancelOrder } from "./actions";
 import styles from "../operator.module.css";
 
 const usd = (n: number) =>
@@ -38,32 +39,18 @@ function formatRange(start: string, end: string): string {
   return `${s} – ${e}`;
 }
 
-function EditIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M4 20h4L18.5 9.5a2.121 2.121 0 0 0-3-3L5 17v3z M13.5 6.5l3 3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+type Msg = { ok: boolean; text: string } | null;
 
 export default function CustomersTable({ customers }: { customers: CustomerRow[] }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<Msg>(null);
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>, id: string) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  function onCancel(id: string) {
     startTransition(async () => {
-      const result = await editCustomer(id, fd);
+      const result = await cancelOrder(id);
       setMsg({ ok: result.ok, text: result.message });
-      if (result.ok) setEditingId(null);
+      if (result.ok) setConfirmingId(null);
     });
   }
 
@@ -83,21 +70,21 @@ export default function CustomersTable({ customers }: { customers: CustomerRow[]
         </thead>
         <tbody>
           {customers.map((c) => (
-            <FragmentRow
+            <OrderRow
               key={c.id}
               c={c}
-              editing={editingId === c.id}
+              confirming={confirmingId === c.id}
               pending={pending}
-              msg={editingId === c.id ? msg : null}
-              onEdit={() => {
+              msg={confirmingId === c.id ? msg : null}
+              onAsk={() => {
                 setMsg(null);
-                setEditingId(c.id);
+                setConfirmingId(c.id);
               }}
-              onCancel={() => {
+              onKeep={() => {
                 setMsg(null);
-                setEditingId(null);
+                setConfirmingId(null);
               }}
-              onSubmit={onSubmit}
+              onCancel={() => onCancel(c.id)}
             />
           ))}
         </tbody>
@@ -106,22 +93,22 @@ export default function CustomersTable({ customers }: { customers: CustomerRow[]
   );
 }
 
-function FragmentRow({
+function OrderRow({
   c,
-  editing,
+  confirming,
   pending,
   msg,
-  onEdit,
+  onAsk,
+  onKeep,
   onCancel,
-  onSubmit,
 }: {
   c: CustomerRow;
-  editing: boolean;
+  confirming: boolean;
   pending: boolean;
-  msg: { ok: boolean; text: string } | null;
-  onEdit: () => void;
+  msg: Msg;
+  onAsk: () => void;
+  onKeep: () => void;
   onCancel: () => void;
-  onSubmit: (e: React.FormEvent<HTMLFormElement>, id: string) => void;
 }) {
   return (
     <>
@@ -167,60 +154,43 @@ function FragmentRow({
         <td>
           <button
             type="button"
-            className={styles.iconBtn}
-            onClick={onEdit}
-            aria-label={`Edit ${c.name || c.email}`}
-            aria-expanded={editing}
+            className={styles.cancelOrderBtn}
+            onClick={onAsk}
+            aria-label={`Cancel order for ${c.name || c.email}`}
+            aria-expanded={confirming}
           >
-            <EditIcon />
+            Cancel order
           </button>
         </td>
       </tr>
 
-      {editing && (
-        <tr className={styles.editRow}>
+      {confirming && (
+        <tr className={styles.confirmRow}>
           <td colSpan={7}>
-            <form className={styles.editForm} onSubmit={(e) => onSubmit(e, c.id)}>
-              <div className={styles.editGrid}>
-                <label className={styles.field}>
-                  <span className={styles.label}>Name</span>
-                  <input name="name" className={styles.input} defaultValue={c.name} required />
-                </label>
-                <label className={styles.field}>
-                  <span className={styles.label}>Email</span>
-                  <input name="email" type="email" className={styles.input} defaultValue={c.email} required />
-                </label>
-                <label className={styles.field}>
-                  <span className={styles.label}>Arrival</span>
-                  <input name="arrival_date" type="date" className={styles.input} defaultValue={c.arrival_date} required />
-                </label>
-                <label className={styles.field}>
-                  <span className={styles.label}>Departure</span>
-                  <input name="departure_date" type="date" className={styles.input} defaultValue={c.departure_date} required />
-                </label>
-                <label className={styles.field}>
-                  <span className={styles.label}>Travelers</span>
-                  <input name="travelers" type="number" min={1} step={1} className={styles.input} defaultValue={c.travelers} required />
-                </label>
-                <label className={styles.field}>
-                  <span className={styles.label}>Budget (USD)</span>
-                  <input name="budget_total" type="number" min={0} step="1" className={styles.input} defaultValue={c.budget_total} required />
-                </label>
-              </div>
-              <div className={styles.submitRow}>
-                <button type="submit" className={styles.submitBtn} disabled={pending}>
-                  {pending ? "Saving…" : "Save changes"}
-                </button>
-                <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={pending}>
-                  Cancel
-                </button>
-                {msg && (
-                  <span className={`${styles.formMsg} ${msg.ok ? styles.formMsgOk : styles.formMsgErr}`}>
-                    {msg.text}
-                  </span>
-                )}
-              </div>
-            </form>
+            <div className={styles.confirmBox}>
+              <span className={styles.confirmText}>
+                This permanently deletes the order and its records. This can&apos;t be undone.
+              </span>
+              <button
+                type="button"
+                className={styles.dangerBtn}
+                onClick={onCancel}
+                disabled={pending}
+              >
+                {pending ? "Cancelling…" : "Yes, cancel order"}
+              </button>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={onKeep}
+                disabled={pending}
+              >
+                Keep
+              </button>
+              {msg && !msg.ok && (
+                <span className={`${styles.formMsg} ${styles.formMsgErr}`}>{msg.text}</span>
+              )}
+            </div>
           </td>
         </tr>
       )}

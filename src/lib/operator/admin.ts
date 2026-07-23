@@ -315,48 +315,39 @@ export async function createLodging(input: NewLodgingInput): Promise<CreateResul
   }
 }
 
-export interface CustomerUpdate {
-  name: string;
-  email: string;
-  arrival_date: string;
-  departure_date: string;
-  travelers: number;
-  budget_total: number;
-}
-
 /**
- * Updates a customer's contact + trip details from the Customers section.
- * Keeps prefs_json.contact_name mirrored to the name column.
+ * Cancels an order by HARD-deleting the client request and everything hanging
+ * off it, in one transaction. This prototype's schema has no cancellation
+ * status or soft-delete flag, so a cancel is a physical delete: order_items →
+ * orders → proposal_cache → provider_responses → client_requests, children
+ * first so no foreign-key reference is left dangling.
  */
-export async function updateCustomer(id: string, input: CustomerUpdate): Promise<CreateResult> {
-  const name = input.name.trim();
-  const email = input.email.trim();
-  if (!name) return { ok: false, message: "Name is required." };
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
-    return { ok: false, message: "Enter a valid email." };
-  if (!(input.travelers > 0)) return { ok: false, message: "Travelers must be positive." };
-  if (!(input.budget_total >= 0)) return { ok: false, message: "Budget must be zero or more." };
-  if (input.departure_date < input.arrival_date)
-    return { ok: false, message: "Departure can't be before arrival." };
-
+export async function deleteOrder(id: string): Promise<CreateResult> {
   const pool = getPool();
+  const client = await pool.connect();
   try {
-    const { rowCount } = await pool.query(
-      `UPDATE client_requests
-         SET name = $2,
-             email = $3,
-             arrival_date = $4,
-             departure_date = $5,
-             travelers = $6,
-             budget_total = $7,
-             prefs_json = jsonb_set(COALESCE(prefs_json, '{}'), '{contact_name}', to_jsonb($2::text))
-       WHERE id = $1`,
-      [id, name, email, input.arrival_date, input.departure_date, input.travelers, input.budget_total]
+    await client.query("BEGIN");
+    const exists = await client.query(`SELECT 1 FROM client_requests WHERE id = $1`, [id]);
+    if (!exists.rows.length) {
+      await client.query("ROLLBACK");
+      return { ok: false, message: "Order not found." };
+    }
+    await client.query(
+      `DELETE FROM order_items
+        WHERE order_id IN (SELECT id FROM orders WHERE request_id = $1)`,
+      [id]
     );
-    if (!rowCount) return { ok: false, message: "Customer not found." };
-    return { ok: true, message: "Customer updated." };
+    await client.query(`DELETE FROM orders WHERE request_id = $1`, [id]);
+    await client.query(`DELETE FROM proposal_cache WHERE request_id = $1`, [id]);
+    await client.query(`DELETE FROM provider_responses WHERE request_id = $1`, [id]);
+    await client.query(`DELETE FROM client_requests WHERE id = $1`, [id]);
+    await client.query("COMMIT");
+    return { ok: true, message: "Order cancelled." };
   } catch (err) {
-    return { ok: false, message: `Could not save: ${(err as Error).message}` };
+    await client.query("ROLLBACK");
+    return { ok: false, message: `Could not cancel: ${(err as Error).message}` };
+  } finally {
+    client.release();
   }
 }
 

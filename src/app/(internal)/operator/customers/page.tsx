@@ -5,29 +5,29 @@ import styles from "../operator.module.css";
 export const dynamic = "force-dynamic";
 
 /**
- * Customers section: every client request with its trip data. One row per
- * customer, newest first; each row has an inline edit form.
+ * Orders section: every client request with its trip data. One row per order,
+ * newest first; each row can be cancelled (a hard delete).
  */
-export default async function CustomersPage() {
+export default async function OrdersPage() {
   const customers = await getCustomers();
 
   return (
     <>
       <div className={styles.pageHead}>
-        <h1 className={styles.pageTitle}>Customers</h1>
+        <h1 className={styles.pageTitle}>Orders</h1>
         <p className={styles.pageSub}>
-          Everyone who has requested a trip, with their preferences and status.
+          Every trip request, with its preferences and status.
         </p>
       </div>
 
       <div className={styles.sectionHead}>
-        <h2 className={styles.sectionTitle}>All customers</h2>
+        <h2 className={styles.sectionTitle}>All orders</h2>
         <span className={styles.count}>{customers.length}</span>
       </div>
 
       {customers.length === 0 ? (
         <div className={styles.emptyCard}>
-          <p className={styles.emptyTitle}>No customers yet</p>
+          <p className={styles.emptyTitle}>No orders yet</p>
           <p className={styles.emptySub}>Client requests will appear here as they come in.</p>
         </div>
       ) : (
