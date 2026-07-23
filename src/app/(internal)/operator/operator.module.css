@@ -46,22 +46,24 @@
   align-items: flex-start;
 }
 
-/* Left sidebar nav */
+/* Left sidebar nav — a fixed, slightly darker panel. */
 .sidebar {
-  flex: 0 0 188px;
+  flex: 0 0 196px;
   position: sticky;
   top: 24px;
-  padding-top: 28px;
+  background: var(--pale);
+  border: 1px solid var(--pale-line);
+  border-radius: 14px;
+  padding: 10px 0;
+  overflow: hidden; /* clips the full-width active bar to the panel radius */
 }
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 .navLink {
   display: block;
-  padding: 10px 14px;
-  border-radius: var(--radius-md, 10px);
+  padding: 12px 22px;
   font-size: 15px;
   font-weight: 500;
   color: var(--muted);
@@ -69,9 +71,10 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 .navLink:hover {
-  background: var(--pale);
+  background: rgba(15, 71, 175, 0.08);
   color: var(--navy);
 }
+/* Active: full-width cobalt bar, edge to edge of the panel. */
 .navLinkActive,
 .navLinkActive:hover {
   background: var(--cobalt);
@@ -615,7 +618,8 @@
     position: static;
     flex: none;
     width: 100%;
-    padding-top: 20px;
+    margin-top: 16px;
+    padding: 6px;
   }
   .nav {
     flex-direction: row;
@@ -624,6 +628,7 @@
   }
   .navLink {
     white-space: nowrap;
+    border-radius: 9px;
   }
   .main {
     padding-top: 16px;
