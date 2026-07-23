@@ -33,17 +33,29 @@ const PACE_OPTIONS: { value: NonNullable<ClientPrefs["pace"]>; label: string }[]
   { value: "packed", label: "Intense" },
 ];
 
+// Two ends of a slider — kept short so they sit cleanly under the track.
 const MORNING_OPTIONS: { value: NonNullable<ClientPrefs["mornings"]>; label: string }[] = [
-  { value: "early_ok", label: "Fine to wake early for special activities" },
-  { value: "no_early", label: "Prefer no early mornings" },
+  { value: "early_ok", label: "Early is fine" },
+  { value: "no_early", label: "No early starts" },
 ];
 
-const GROUP_OPTIONS: { value: NonNullable<ClientPrefs["group_composition"]>; label: string }[] = [
-  { value: "couple", label: "Couple" },
-  { value: "family", label: "Family with kids" },
-  { value: "friends", label: "Friends" },
-  { value: "solo", label: "Solo" },
-];
+type GroupValue = NonNullable<ClientPrefs["group_composition"]>;
+
+const GROUP_LABEL: Record<GroupValue, string> = {
+  solo: "Solo",
+  couple: "Couple",
+  family: "Family",
+  friends: "Friends",
+};
+
+// Group type is constrained by party size, and it only *shapes* the itinerary —
+// it never changes pricing (that is strictly per traveler). 1 → solo; 2 → couple
+// / family / friends; 3+ → family / friends.
+function groupOptionsFor(travelers: number): GroupValue[] {
+  if (!(travelers >= 2)) return ["solo"];
+  if (travelers === 2) return ["couple", "family", "friends"];
+  return ["family", "friends"];
+}
 
 // The client no longer picks a lodging level — the budget defines it. This
 // copy explains the band a given budget-per-day unlocks (shown under the
@@ -101,8 +113,9 @@ const EMPTY: FormState = {
   travelers: "2",
   budget_total: "",
   interests: [],
-  pace: "",
-  mornings: "",
+  // Sliders always show a value, so pace/mornings start at a neutral default.
+  pace: "moderate",
+  mornings: "early_ok",
   group_composition: "",
   free_text: "",
   name: "",
@@ -122,6 +135,24 @@ export default function IntakeForm() {
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  // Party size drives which group types are valid, so keep the two in sync:
+  // 1 traveler forces "solo"; a larger party clears an now-invalid choice.
+  const setTravelers = (value: string) =>
+    setForm((f) => {
+      const n = Number(value);
+      const allowed = groupOptionsFor(n);
+      let group = f.group_composition;
+      if (n <= 1) group = "solo";
+      else if (group === "solo" || (group !== "" && !allowed.includes(group)))
+        group = "";
+      return { ...f, travelers: value, group_composition: group };
+    });
+
+  const allowedGroups = useMemo(
+    () => groupOptionsFor(Number(form.travelers)),
+    [form.travelers]
+  );
 
   const toggleInterest = (id: string) =>
     setForm((f) => ({
@@ -149,6 +180,7 @@ export default function IntakeForm() {
       !!form.arrival_time &&
       !!form.departure_time &&
       Number(form.travelers) >= 1 &&
+      !!form.group_composition &&
       Number(form.budget_total) > 0,
     [form]
   );
@@ -178,11 +210,7 @@ export default function IntakeForm() {
   }, [form.arrival_date, form.departure_date, form.budget_total, form.travelers]);
 
   const step2Valid = useMemo(
-    () =>
-      form.interests.length > 0 &&
-      !!form.pace &&
-      !!form.mornings &&
-      !!form.group_composition,
+    () => form.interests.length > 0 && !!form.pace && !!form.mornings,
     [form]
   );
 
@@ -310,13 +338,41 @@ export default function IntakeForm() {
                 </select>
               </Field>
               <Field label="Travelers">
-                <input
-                  type="number"
-                  min={1}
-                  className={styles.input}
-                  value={form.travelers}
-                  onChange={(e) => set("travelers", e.target.value)}
-                />
+                <div className={styles.travelerWrap}>
+                  <input
+                    type="number"
+                    min={1}
+                    className={`${styles.input} ${styles.travelerCount}`}
+                    value={form.travelers}
+                    onChange={(e) => setTravelers(e.target.value)}
+                  />
+                  <select
+                    className={`${styles.input} ${styles.select} ${styles.travelerType} ${
+                      form.group_composition ? "" : styles.inputEmpty
+                    }`}
+                    value={form.group_composition}
+                    onChange={(e) =>
+                      set("group_composition", e.target.value as GroupValue)
+                    }
+                    disabled={Number(form.travelers) <= 1}
+                    aria-label="Who's traveling"
+                  >
+                    {Number(form.travelers) <= 1 ? (
+                      <option value="solo">Solo</option>
+                    ) : (
+                      <>
+                        <option value="" disabled>
+                          Who with?
+                        </option>
+                        {allowedGroups.map((g) => (
+                          <option key={g} value={g}>
+                            {GROUP_LABEL[g]}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
               </Field>
               <Field label="Total budget (USD)">
                 <div className={styles.moneyWrap}>
@@ -333,6 +389,7 @@ export default function IntakeForm() {
                 </div>
               </Field>
             </div>
+
             {budgetRange && (
               <p
                 className={`${styles.rangeHint} ${
@@ -403,41 +460,21 @@ export default function IntakeForm() {
 
             <div className={styles.block}>
               <span className={styles.blockLabel}>Pace</span>
-              <Segmented
+              <Slider
                 options={PACE_OPTIONS}
                 value={form.pace}
                 onChange={(v) => set("pace", v)}
+                ariaLabel="Trip pace"
               />
             </div>
 
             <div className={styles.block}>
               <span className={styles.blockLabel}>Mornings</span>
-              <div className={styles.stack}>
-                {MORNING_OPTIONS.map((o) => {
-                  const on = form.mornings === o.value;
-                  return (
-                    <button
-                      type="button"
-                      key={o.value}
-                      className={`${styles.option} ${on ? styles.optionOn : ""}`}
-                      aria-pressed={on}
-                      onClick={() => set("mornings", o.value)}
-                    >
-                      <span className={styles.radioDot} aria-hidden />
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className={styles.block}>
-              <span className={styles.blockLabel}>Group</span>
-              <Segmented
-                options={GROUP_OPTIONS}
-                value={form.group_composition}
-                onChange={(v) => set("group_composition", v)}
-                wrap
+              <Slider
+                options={MORNING_OPTIONS}
+                value={form.mornings}
+                onChange={(v) => set("mornings", v)}
+                ariaLabel="Morning preference"
               />
             </div>
           </fieldset>
@@ -567,33 +604,62 @@ function Field({
   );
 }
 
-function Segmented<T extends string>({
+/**
+ * A discrete "line selector": a draggable thumb that snaps to labeled stops.
+ * A transparent native range handles drag + keyboard; the track, fill, stops
+ * and thumb are drawn on top so it matches the rest of the form.
+ */
+function Slider<T extends string>({
   options,
   value,
   onChange,
-  wrap,
+  ariaLabel,
 }: {
   options: { value: T; label: string }[];
   value: T | "";
   onChange: (v: T) => void;
-  wrap?: boolean;
+  ariaLabel: string;
 }) {
+  const last = options.length - 1;
+  const idx = Math.max(0, options.findIndex((o) => o.value === value));
+  const pct = last > 0 ? (idx / last) * 100 : 0;
+
   return (
-    <div className={`${styles.segmented} ${wrap ? styles.segmentedWrap : ""}`} role="group">
-      {options.map((o) => {
-        const on = value === o.value;
-        return (
+    <div className={styles.slider}>
+      <div className={styles.sliderTrack}>
+        <div className={styles.sliderFill} style={{ width: `${pct}%` }} />
+        {options.map((o, i) => (
+          <span
+            key={o.value}
+            className={`${styles.sliderStop} ${i <= idx ? styles.sliderStopOn : ""}`}
+            style={{ left: `${last > 0 ? (i / last) * 100 : 0}%` }}
+            aria-hidden
+          />
+        ))}
+        <span className={styles.sliderThumb} style={{ left: `${pct}%` }} aria-hidden />
+        <input
+          type="range"
+          className={styles.sliderInput}
+          min={0}
+          max={last}
+          step={1}
+          value={idx}
+          aria-label={ariaLabel}
+          onChange={(e) => onChange(options[Number(e.target.value)].value)}
+        />
+      </div>
+      <div className={styles.sliderLabels}>
+        {options.map((o, i) => (
           <button
             type="button"
             key={o.value}
-            className={`${styles.seg} ${on ? styles.segOn : ""}`}
-            aria-pressed={on}
+            className={`${styles.sliderLabel} ${i === idx ? styles.sliderLabelOn : ""}`}
             onClick={() => onChange(o.value)}
           >
             {o.label}
           </button>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }

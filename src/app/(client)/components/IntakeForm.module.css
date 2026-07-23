@@ -173,6 +173,29 @@
   background-position: right 14px center;
 }
 
+/* Travelers: a count paired with a party-type dropdown ([2] [Couple ▾]). */
+.travelerWrap {
+  display: flex;
+  gap: 8px;
+}
+.travelerCount {
+  flex: 0 0 74px;
+  width: 74px;
+  text-align: center;
+}
+.travelerType {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* When party size is 1 the type is locked to Solo: read-only, no caret. */
+.select:disabled {
+  cursor: default;
+  color: var(--navy);
+  -webkit-text-fill-color: var(--navy);
+  opacity: 1;
+  background-image: none;
+}
+
 /* Live budget → lodging-band hint, shown under the basics grid. */
 .rangeHint {
   margin-top: 12px;
@@ -285,6 +308,104 @@
 }
 .segOn:hover {
   background: var(--cobalt);
+}
+
+/* ---- Slider (pace / mornings line selector) ---------------------- */
+.slider {
+  padding-top: 2px;
+}
+.sliderTrack {
+  position: relative;
+  height: 6px;
+  margin: 18px 11px 0;
+  background: var(--pale-line);
+  border-radius: 999px;
+}
+.sliderFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--cobalt);
+  border-radius: 999px;
+  transition: width 0.16s ease;
+}
+.sliderStop {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: #cdd7e8;
+}
+.sliderStopOn {
+  background: var(--cobalt);
+}
+.sliderThumb {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--cobalt);
+  box-shadow: 0 2px 6px rgba(15, 71, 175, 0.28);
+  transition: left 0.16s ease;
+  pointer-events: none;
+}
+.sliderInput {
+  position: absolute;
+  top: 50%;
+  left: -11px;
+  width: calc(100% + 22px);
+  height: 34px;
+  margin: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.sliderInput::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+.sliderInput::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+}
+.sliderLabels {
+  display: flex;
+  justify-content: space-between;
+  margin: 15px 0 0;
+}
+.sliderLabel {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.14s ease;
+}
+.sliderLabel:first-child {
+  text-align: left;
+}
+.sliderLabel:last-child {
+  text-align: right;
+}
+.sliderLabelOn {
+  color: var(--navy);
+  font-weight: 600;
 }
 
 /* ---- Stacked options (mornings) ---------------------------------- */
