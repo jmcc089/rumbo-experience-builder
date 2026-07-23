@@ -6,14 +6,15 @@
   background: var(--offwhite);
 }
 
-/* Top bar — thin cobalt band, matches the provider portal pattern. */
+/* Top bar — full-width cobalt band, sticky above the sidebar + content. */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   background: var(--cobalt);
   color: #fff;
 }
 .topbarInner {
-  max-width: 1160px;
-  margin: 0 auto;
   padding: 0 24px;
   height: 58px;
   display: flex;
@@ -36,26 +37,23 @@
   border-left: 1px solid rgba(255, 255, 255, 0.28);
 }
 
-/* Body: centered container holding the sidebar + main content side by side. */
 .body {
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 0 24px;
-  display: flex;
-  gap: 32px;
-  align-items: flex-start;
+  display: block;
 }
 
-/* Left sidebar nav — a fixed, slightly darker panel. */
+/* A real sidebar: fixed full-height column pinned to the left under the topbar,
+   separate from the page content, which is offset to its right. */
 .sidebar {
-  flex: 0 0 196px;
-  position: sticky;
-  top: 24px;
+  position: fixed;
+  top: 58px; /* height of the topbar */
+  left: 0;
+  bottom: 0;
+  width: 216px;
   background: var(--pale);
-  border: 1px solid var(--pale-line);
-  border-radius: 14px;
-  padding: 10px 0;
-  overflow: hidden; /* clips the full-width active bar to the panel radius */
+  border-right: 1px solid var(--pale-line);
+  padding: 14px 0;
+  overflow-y: auto;
+  z-index: 20;
 }
 .nav {
   display: flex;
@@ -63,7 +61,7 @@
 }
 .navLink {
   display: block;
-  padding: 12px 22px;
+  padding: 13px 24px;
   font-size: 15px;
   font-weight: 500;
   color: var(--muted);
@@ -74,7 +72,7 @@
   background: rgba(15, 71, 175, 0.08);
   color: var(--navy);
 }
-/* Active: full-width cobalt bar, edge to edge of the panel. */
+/* Active: full-width cobalt bar spanning the whole sidebar, edge to edge. */
 .navLinkActive,
 .navLinkActive:hover {
   background: var(--cobalt);
@@ -82,9 +80,9 @@
 }
 
 .main {
-  flex: 1 1 auto;
+  margin-left: 216px; /* clears the fixed sidebar */
   min-width: 0;
-  padding: 28px 0 72px;
+  padding: 28px 40px 72px;
 }
 
 .pageHead {
@@ -610,16 +608,16 @@
 }
 
 @media (max-width: 900px) {
-  .body {
-    flex-direction: column;
-    gap: 0;
-  }
+  /* Sidebar collapses to a horizontal bar under the topbar; content un-offsets. */
   .sidebar {
     position: static;
-    flex: none;
-    width: 100%;
-    margin-top: 16px;
+    width: auto;
+    top: auto;
+    bottom: auto;
     padding: 6px;
+    border-right: none;
+    border-bottom: 1px solid var(--pale-line);
+    overflow-y: visible;
   }
   .nav {
     flex-direction: row;
@@ -631,7 +629,8 @@
     border-radius: 9px;
   }
   .main {
-    padding-top: 16px;
+    margin-left: 0;
+    padding: 20px;
   }
   .columns {
     grid-template-columns: 1fr;
