@@ -108,6 +108,31 @@ function MoonGlyph() {
   );
 }
 
+/* ── Location pin ───────────────────────────────────────────────────────── */
+
+/**
+ * Opens this exact place in Google Maps. In a production Rumbo this would open
+ * a rich place page (photos, video, details) for the traveller to review before
+ * accepting; the map pin is the portfolio-scope stand-in.
+ */
+function LocationLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      className={styles.mapLink}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`See ${label} on Google Maps`}
+      aria-label={`See ${label} on Google Maps`}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z" />
+        <circle cx="12" cy="10" r="2.6" />
+      </svg>
+    </a>
+  );
+}
+
 /* ── Category tag ───────────────────────────────────────────────────────── */
 
 export function CategoryTags({ categories }: { categories: ExperienceCategory[] }) {
@@ -157,7 +182,10 @@ function DayCard({ day }: { day: EnrichedDay }) {
               <CategoryGlyph category={exp.category} />
             </span>
             <div className={styles.eventMain}>
-              <span className={styles.eventText}>{exp.name}</span>
+              <span className={styles.eventText}>
+                {exp.name}
+                {exp.maps_url && <LocationLink href={exp.maps_url} label={exp.name} />}
+              </span>
               <span className={styles.eventMeta}>
                 {exp.start_time}–{exp.end_time}
                 {exp.dependency ? <em className={styles.eventNote}> · {DEPENDENCY_NOTE[exp.dependency]}</em> : null}
@@ -172,6 +200,9 @@ function DayCard({ day }: { day: EnrichedDay }) {
           </span>
           <span className={styles.eventText}>
             Overnight · {day.lodging_name}
+            {day.lodging_maps_url && (
+              <LocationLink href={day.lodging_maps_url} label={day.lodging_name} />
+            )}
             <span className={styles.tierBadge}>{day.lodging_tier}</span>
           </span>
         </div>

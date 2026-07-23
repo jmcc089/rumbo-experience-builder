@@ -26,7 +26,7 @@ export default async function ProposalsPage({ params }: { params: Promise<{ toke
   if (view.status === "paid") {
     return (
       <>
-        <Header />
+        <Header showCta={false} />
         <main className={styles.stateMain}>
           {view.chosen ? (
             <Confirmation proposal={view.chosen} travelers={view.travelers ?? 1} alreadyBooked />
@@ -45,7 +45,7 @@ export default async function ProposalsPage({ params }: { params: Promise<{ toke
   // Non-happy states — calm, on-brand panels.
   return (
     <>
-      <Header />
+      <Header showCta={false} />
       <main className={styles.stateMain}>
         {view.status === "not_ready" && (
           <StatePanel

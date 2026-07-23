@@ -23,7 +23,7 @@ export async function sendProposalsReady(to: string, token: string): Promise<voi
 }
 
 /** Trigger 3: when the client pays. */
-export async function sendPurchaseConfirmation(to: string, order: OrderSummary): Promise<void> {
-  const { subject, html } = purchaseConfirmationEmail(order);
+export async function sendPurchaseConfirmation(to: string, order: OrderSummary, token: string): Promise<void> {
+  const { subject, html } = purchaseConfirmationEmail(order, token);
   await sendEmail({ to, subject, html });
 }

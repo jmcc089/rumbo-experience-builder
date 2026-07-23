@@ -521,7 +521,7 @@ export default function IntakeForm() {
                 />
               </Field>
             </div>
-            <p className={styles.subtle}>
+            <p className={`${styles.subtle} ${styles.identityNote}`}>
               No account, no password. Your itineraries arrive by email.
             </p>
           </fieldset>

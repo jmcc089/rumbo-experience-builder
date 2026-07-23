@@ -29,6 +29,7 @@ export interface EnrichedExperience {
   end_time: string; // 'HH:MM'
   duration_min: number;
   dependency: Dependency;
+  maps_url: string | null; // provider coordinates, opened in Google Maps
 }
 
 export interface EnrichedDay {
@@ -37,6 +38,7 @@ export interface EnrichedDay {
   zone_name: string;
   lodging_name: string;
   lodging_tier: LodgingTier;
+  lodging_maps_url: string | null;
   transfer_in_minutes: number;
   experiences: EnrichedExperience[];
 }
@@ -70,9 +72,30 @@ export interface ProposalsPageView {
 
 /* ── Catalog lookup ─────────────────────────────────────────────────────── */
 
+/**
+ * Google Maps deep link for a place. Uses the keyless Maps URL scheme, so it
+ * opens the pin directly in the app or the web, with no API key involved.
+ * Returns null when a row has no coordinates, so callers can just omit the pin.
+ */
+function mapsUrl(lat: unknown, lng: unknown): string | null {
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${la},${ln}`;
+}
+
 interface CatalogMaps {
-  exp: Map<string, { name: string; category: ExperienceCategory; duration_min: number; dependency: Dependency }>;
-  lodging: Map<string, { name: string; tier: LodgingTier }>;
+  exp: Map<
+    string,
+    {
+      name: string;
+      category: ExperienceCategory;
+      duration_min: number;
+      dependency: Dependency;
+      maps_url: string | null;
+    }
+  >;
+  lodging: Map<string, { name: string; tier: LodgingTier; maps_url: string | null }>;
   zone: Map<string, string>;
 }
 
@@ -92,12 +115,19 @@ async function loadCatalog(snapshots: ItinerarySnapshot[]): Promise<CatalogMaps>
   const [expRes, lodgingRes, zoneRes] = await Promise.all([
     experienceIds.size
       ? pool.query(
-          `SELECT id, name, category, duration_min, dependency FROM experiences WHERE id = ANY($1)`,
+          // LEFT JOIN: an experience must never disappear just because its
+          // provider row is missing coordinates.
+          `SELECT e.id, e.name, e.category, e.duration_min, e.dependency, p.lat, p.lng
+             FROM experiences e
+             LEFT JOIN providers p ON p.id = e.provider_id
+            WHERE e.id = ANY($1)`,
           [Array.from(experienceIds)]
         )
       : Promise.resolve({ rows: [] }),
     lodgingIds.size
-      ? pool.query(`SELECT id, name, tier FROM lodging WHERE id = ANY($1)`, [Array.from(lodgingIds)])
+      ? pool.query(`SELECT id, name, tier, lat, lng FROM lodging WHERE id = ANY($1)`, [
+          Array.from(lodgingIds),
+        ])
       : Promise.resolve({ rows: [] }),
     zoneIds.size
       ? pool.query(`SELECT id, name FROM zones WHERE id = ANY($1)`, [Array.from(zoneIds)])
@@ -113,10 +143,16 @@ async function loadCatalog(snapshots: ItinerarySnapshot[]): Promise<CatalogMaps>
           category: r.category as ExperienceCategory,
           duration_min: Number(r.duration_min),
           dependency: (r.dependency ?? null) as Dependency,
+          maps_url: mapsUrl(r.lat, r.lng),
         },
       ])
     ),
-    lodging: new Map(lodgingRes.rows.map((r) => [r.id, { name: r.name, tier: r.tier as LodgingTier }])),
+    lodging: new Map(
+      lodgingRes.rows.map((r) => [
+        r.id,
+        { name: r.name, tier: r.tier as LodgingTier, maps_url: mapsUrl(r.lat, r.lng) },
+      ])
+    ),
     zone: new Map(zoneRes.rows.map((r) => [r.id, r.name])),
   };
 }
@@ -213,6 +249,7 @@ function enrichOne(snap: ItinerarySnapshot, index: number, arrivalDate: string, 
     zone_name: catalog.zone.get(day.zone_id) ?? day.zone_id,
     lodging_name: catalog.lodging.get(day.lodging_id)?.name ?? day.lodging_id,
     lodging_tier: catalog.lodging.get(day.lodging_id)?.tier ?? "comfort",
+    lodging_maps_url: catalog.lodging.get(day.lodging_id)?.maps_url ?? null,
     transfer_in_minutes: day.transfer_in_minutes,
     experiences: day.experiences.map((exp) => {
       const meta = catalog.exp.get(exp.experience_id);
@@ -223,6 +260,7 @@ function enrichOne(snap: ItinerarySnapshot, index: number, arrivalDate: string, 
         end_time: exp.end_time,
         duration_min: meta?.duration_min ?? 0,
         dependency: meta?.dependency ?? null,
+        maps_url: meta?.maps_url ?? null,
       };
     }),
   }));

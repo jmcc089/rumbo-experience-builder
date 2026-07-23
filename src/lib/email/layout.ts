@@ -1,6 +1,8 @@
 // Rumbo · SBI-08: shared brand HTML shell for transactional emails.
 // Table-based, inline-styled, UTF-8 — robust across email clients, not clever.
 
+import { getAppBaseUrl } from "./client";
+
 const COBALT = "#0F47AF";
 const NAVY_INK = "#1E2A44";
 const OFF_WHITE = "#FBFCFE";
@@ -50,6 +52,19 @@ export function renderLayout(opts: LayoutOptions): string {
     ? `<p style="margin:0 0 12px 0; font-family:${SANS}; font-size:12px; font-weight:bold; letter-spacing:1.6px; text-transform:uppercase; color:${GOLD_DEEP};">${eyebrow}</p>`
     : "";
 
+  // The Sarina script logo can't be a web font in email (Gmail strips them), so
+  // we ship a hosted PNG. Falls back to the serif wordmark when no base URL is
+  // configured (e.g. local runs), so the header is never empty.
+  const base = getAppBaseUrl();
+  const logoHtml = base
+    ? `<img src="${base}/rumbo-logo.png" width="188" alt="Rumbo" style="display:block; width:188px; max-width:70%; height:auto; border:0; margin:0 auto;">`
+    : `<span style="font-family:${SERIF}; font-size:29px; color:#ffffff; letter-spacing:0.5px;">Rumbo<span style="color:${GOLD};">.</span></span>`;
+
+  // Footer sign-off: the same script wordmark in cobalt (pale background).
+  const footerLogoHtml = base
+    ? `<img src="${base}/rumbo-logo-blue.png" width="104" alt="Rumbo" style="display:inline-block; width:104px; height:auto; border:0;">`
+    : `<span style="font-family:${SERIF}; font-size:20px; color:${COBALT};">Rumbo<span style="color:${GOLD_DEEP};">.</span></span>`;
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -67,9 +82,8 @@ ${preheaderHtml}
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">
         <!-- Header -->
         <tr>
-          <td align="center" style="background-color:${COBALT}; padding:32px 24px 26px 24px; border-radius:10px 10px 0 0;">
-            <span style="font-family:${SERIF}; font-size:27px; color:#ffffff; letter-spacing:0.5px;">Rumbo<span style="color:${GOLD};">.</span></span>
-            <div style="margin-top:9px; font-family:${SANS}; font-size:11px; letter-spacing:2.5px; text-transform:uppercase; color:#aec4ea;">Boutique travel &middot; El Salvador</div>
+          <td align="center" style="background-color:${COBALT}; padding:32px 24px; border-radius:10px 10px 0 0;">
+            ${logoHtml}
           </td>
         </tr>
         <!-- Gold accent rule -->
@@ -87,13 +101,13 @@ ${preheaderHtml}
         </tr>
         <!-- Footer -->
         <tr>
-          <td style="background-color:${PALE}; padding:26px 36px; border-radius:0 0 10px 10px; border-top:1px solid ${PALE_LINE};">
-            <p style="margin:0 0 6px 0; font-family:${SERIF}; font-size:16px; color:${COBALT};">Rumbo<span style="color:${GOLD_DEEP};">.</span></p>
-            <p style="margin:0; font-family:${SANS}; font-size:12px; line-height:1.6; color:${MUTED};">All of El Salvador, none of the planning.<br>A portfolio demonstration &mdash; no real booking or payment is processed.</p>
+          <td align="center" style="background-color:${PALE}; padding:28px 36px; border-radius:0 0 10px 10px; border-top:1px solid ${PALE_LINE};">
+            <p style="margin:0 0 8px 0; text-align:center;">${footerLogoHtml}</p>
+            <p style="margin:0; font-family:${SANS}; font-size:13px; line-height:1.5; color:${MUTED}; text-align:center;">All of El Salvador, none of the planning.</p>
           </td>
         </tr>
       </table>
-      <p style="margin:18px 0 0 0; font-family:${SANS}; font-size:11px; color:${MUTED};">&copy; 2026 Rumbo &middot; San Salvador, El Salvador</p>
+      <p style="margin:18px 0 0 0; font-family:${SANS}; font-size:11px; color:${MUTED};">&copy; 2026 Rumbo &middot; El Salvador</p>
     </td>
   </tr>
 </table>

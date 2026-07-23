@@ -10,7 +10,7 @@ export default async function StatusPage({ params }: { params: Promise<{ token: 
 
   return (
     <>
-      <Header />
+      <Header showCta={false} />
       <StatusClient token={token} initialStatus={status} />
     </>
   );

@@ -238,7 +238,7 @@ export async function confirmAndPay(
 
   // SBI-08 trigger (email 3): purchase confirmation / receipt.
   const summary = await buildOrderSummary(itinerary);
-  await sendPurchaseConfirmation(request.email, summary);
+  await sendPurchaseConfirmation(request.email, summary, token);
 
   await hooks.notifyOrderConfirmed?.({
     requestId: request.id,

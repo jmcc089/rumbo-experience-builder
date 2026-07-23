@@ -11,6 +11,18 @@ import styles from "./proposals.module.css";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
+// Minimum time the confirming overlay stays up, so its reassurance messages
+// have room to play even when the booking resolves quickly.
+const CONFIRM_MIN_MS = 5000;
+
+const CONFIRM_STEPS = [
+  "Confirming with your providers…",
+  "Reserving your lodging…",
+  "Locking in your activities…",
+  "Arranging your transfers…",
+  "Finalizing your trip…",
+];
+
 /* ── Hold countdown ─────────────────────────────────────────────────────── */
 
 function useCountdown(expiresAt: string | null): { mmss: string; expired: boolean; urgent: boolean } {
@@ -55,9 +67,16 @@ export default function ProposalsClient({
   async function handleBook() {
     setError(null);
     setPaying(true);
+    const started = Date.now();
     try {
       const res = await bookTrip(token, selected);
       if (res.status === "paid") {
+        // Keep the confirming overlay up long enough for its messages to play,
+        // so a fast server response doesn't flash by and feel broken.
+        const elapsed = Date.now() - started;
+        if (elapsed < CONFIRM_MIN_MS) {
+          await new Promise((r) => setTimeout(r, CONFIRM_MIN_MS - elapsed));
+        }
         setBooked(true);
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else if (res.status === "expired") {
@@ -75,7 +94,7 @@ export default function ProposalsClient({
   if (booked) {
     return (
       <>
-        <Header />
+        <Header showCta={false} />
         <main className={styles.stateMain}>
           <Confirmation proposal={active} travelers={travelers} />
         </main>
@@ -85,7 +104,8 @@ export default function ProposalsClient({
 
   return (
     <>
-      <Header />
+      <Header showCta={false} />
+      <BookingOverlay open={paying} />
       <main className={styles.main}>
         {/* Intro + hold */}
         <section className={styles.intro}>
@@ -171,6 +191,37 @@ export default function ProposalsClient({
 }
 
 /* ── Sub-components ─────────────────────────────────────────────────────── */
+
+function BookingOverlay({ open }: { open: boolean }) {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (!open) {
+      setStep(0);
+      return;
+    }
+    const id = setInterval(
+      () => setStep((s) => Math.min(s + 1, CONFIRM_STEPS.length - 1)),
+      1150
+    );
+    return () => clearInterval(id);
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className={styles.overlay} role="alertdialog" aria-modal="true" aria-label="Confirming your booking">
+      <div className={styles.overlayCard}>
+        <span className={styles.spinner} aria-hidden />
+        <p className={styles.overlayTitle}>Confirming your trip</p>
+        <p key={step} className={styles.overlayMsg} aria-live="polite">
+          {CONFIRM_STEPS[step]}
+        </p>
+        <p className={styles.overlayNote}>This only takes a moment. Please keep this page open.</p>
+      </div>
+    </div>
+  );
+}
 
 function HoldBadge({ mmss, expired, urgent }: { mmss: string; expired: boolean; urgent: boolean }) {
   if (!mmss) return null;

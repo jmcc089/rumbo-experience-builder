@@ -116,6 +116,9 @@
   letter-spacing: 0;
   text-transform: none;
 }
+.identityNote {
+  margin-top: 16px;
+}
 
 /* ---- Fields ------------------------------------------------------ */
 .field {
@@ -534,25 +537,25 @@
 }
 .buildingLink {
   display: inline-block;
-  margin-top: 6px;
+  margin-top: 28px;
+  padding: 11px 22px;
+  border: 1px solid var(--pale-line);
+  border-radius: 999px;
+  background: var(--pale);
   color: var(--cobalt);
   font-weight: 600;
   font-size: 14.5px;
-  border-bottom: 1px solid var(--gold);
-  padding-bottom: 1px;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 .buildingLink:hover {
   color: var(--cobalt-deep);
+  border-color: var(--cobalt);
 }
 .buildingNote {
-  display: inline-block;
-  margin-top: 22px;
-  padding: 10px 18px;
-  border: 1px solid var(--pale-line);
-  border-radius: 999px;
-  font-size: 13.5px;
-  color: var(--navy);
-  background: var(--pale);
+  display: block;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* ---- Responsive -------------------------------------------------- */

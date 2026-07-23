@@ -41,10 +41,10 @@ export function acknowledgmentEmail(): EmailContent {
       ${step("Our engine assembles three complete, distinct itineraries around what you told us.")}
       ${step("We email you the moment your options are ready to review.")}
     </table>
-    <p style="margin:0;">No action is needed from you right now &mdash; sit tight, we'll be in touch shortly.</p>
+    <p style="margin:0;">No action is needed from you right now. Sit tight, we'll be in touch shortly.</p>
   `;
   return {
-    subject: "We received your request — Rumbo is on it",
+    subject: "We received your request, Rumbo is on it",
     html: renderLayout({
       preheader: "We're matching providers and building your three itineraries now.",
       eyebrow: "Request received",
@@ -58,7 +58,7 @@ export function acknowledgmentEmail(): EmailContent {
 export function proposalsReadyEmail(token: string): EmailContent {
   const link = `${getAppBaseUrl()}/proposals/${token}`;
   const bodyHtml = `
-    <p style="margin:0 0 16px 0;">Good news &mdash; your trip is ready.</p>
+    <p style="margin:0 0 16px 0;">Good news: your trip is ready.</p>
     <p style="margin:0 0 4px 0;">We've put together <strong>three complete itineraries</strong>, each shaped around what you told us:
     the pace you wanted, the things you're drawn to, and how you like to travel. Take a look, compare them side by side,
     and book the one that feels right.</p>
@@ -79,60 +79,36 @@ export function proposalsReadyEmail(token: string): EmailContent {
 }
 
 /** One day of the confirmed itinerary, rendered as an on-brand card. */
-function renderDayCard(day: OrderSummaryDay): string {
-  const experiencesHtml = day.experience_names.length
-    ? day.experience_names
-        .map(
-          (name) => `
-        <tr>
-          <td width="18" valign="top" style="padding:4px 0;">
-            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:${T.GOLD};"></span>
-          </td>
-          <td style="font-family:${T.SANS}; font-size:14px; line-height:1.5; color:${T.NAVY_INK};">${name}</td>
-        </tr>`
-        )
-        .join("")
-    : `<tr><td colspan="2" style="font-family:${T.SANS}; font-size:14px; line-height:1.5; color:${T.MUTED}; font-style:italic;">A free day to explore at your own pace.</td></tr>`;
+// Per-day cards now live on the web itinerary; Email 3 links out to it instead
+// of embedding the full trip (the page persists for paid trips, so the link
+// never rots).
 
-  return `
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px; background-color:${T.PALE}; border-radius:8px;">
-    <tr>
-      <td style="padding:18px 20px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-          <tr>
-            <td style="font-family:${T.SANS}; font-size:11px; font-weight:bold; letter-spacing:1.4px; text-transform:uppercase; color:#ffffff; background-color:${T.COBALT}; border-radius:4px; padding:5px 10px;">Day ${day.day_index}</td>
-            <td style="padding-left:12px; font-family:${T.SERIF}; font-size:19px; color:${T.NAVY_INK};">${day.zone_name}</td>
-          </tr>
-        </table>
-        <p style="margin:15px 0 12px 0; font-family:${T.SANS}; font-size:11px; letter-spacing:0.8px; text-transform:uppercase; color:${T.MUTED};">Stay &middot; <span style="font-size:14px; letter-spacing:0; text-transform:none; color:${T.NAVY_INK};">${day.lodging_name}</span></p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${experiencesHtml}</table>
-      </td>
-    </tr>
-  </table>`;
-}
-
-/** Email 3 — purchase confirmation / receipt. */
-export function purchaseConfirmationEmail(order: OrderSummary): EmailContent {
+/** Email 3 — purchase confirmation / receipt. Links to the full web itinerary. */
+export function purchaseConfirmationEmail(order: OrderSummary, token: string): EmailContent {
   const zones = order.days.map((d) => d.zone_name);
   const uniqueZones = Array.from(new Set(zones));
   const routeLabel =
     uniqueZones.length > 1 ? `${uniqueZones[0]} → ${uniqueZones[uniqueZones.length - 1]}` : uniqueZones[0] ?? "";
   const summaryLine = `${order.days.length} ${order.days.length === 1 ? "day" : "days"} · ${uniqueZones.length} ${uniqueZones.length === 1 ? "region" : "regions"} · ${routeLabel}`;
 
-  const daysHtml = order.days.map(renderDayCard).join("");
+  const link = `${getAppBaseUrl()}/proposals/${token}`;
 
   const bodyHtml = `
-    <p style="margin:0 0 22px 0;">You're all set &mdash; your trip is booked. Here's everything you'll be doing, day by day.</p>
+    <p style="margin:0 0 22px 0;">You're all set: your trip is booked. Your complete day by day itinerary, with times, stays and everything included, is ready to view online.</p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;">
       <tr>
         <td style="font-family:${T.SANS}; font-size:13px; letter-spacing:0.3px; color:${T.MUTED};">${summaryLine}</td>
       </tr>
     </table>
 
-    ${daysHtml}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td align="center">${renderCtaButton("View your full itinerary", link)}</td>
+      </tr>
+    </table>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px 0; background-color:#fbf3e6; border:1px solid ${T.GOLD}; border-radius:8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 8px 0; background-color:#fbf3e6; border:1px solid ${T.GOLD}; border-radius:8px;">
       <tr>
         <td style="padding:18px 22px; font-family:${T.SANS}; font-size:13px; font-weight:bold; letter-spacing:1px; text-transform:uppercase; color:${T.GOLD_TEXT};">Total paid</td>
         <td align="right" style="padding:18px 22px; font-family:${T.SERIF}; font-size:26px; color:${T.NAVY_INK};">${formatUsd(order.client_total)}</td>
