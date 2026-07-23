@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { recordProviderResponse, getProviderBookings } from "@/lib/provider";
-import { reportDropoutAndRepair } from "@/lib/repair";
+import { reportDropoutAndRepair, getOrderClientContact } from "@/lib/repair";
+import { sendItineraryChanged } from "@/lib/email";
 
 export type RespondResult = { ok: true } | { ok: false; error: string };
 
@@ -57,6 +58,16 @@ export async function reportCannotDeliver(
     const outcome = await reportDropoutAndRepair(orderId, orderItemId);
     revalidatePath("/provider");
     if (outcome.repaired) {
+      // Notify the client their itinerary changed (best-effort, never blocks).
+      try {
+        const contact = await getOrderClientContact(orderId);
+        if (contact?.email && contact.token) {
+          const dayNumber = outcome.dayIndex != null ? outcome.dayIndex + 1 : undefined;
+          await sendItineraryChanged(contact.email, contact.token, dayNumber);
+        }
+      } catch (err) {
+        console.error(`[provider] itinerary-changed email failed for order ${orderId}:`, err);
+      }
       return { ok: true, repaired: true, newService: null };
     }
     return { ok: true, repaired: false, reason: outcome.reason ?? "No replacement found" };

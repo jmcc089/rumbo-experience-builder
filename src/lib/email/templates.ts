@@ -127,3 +127,30 @@ export function purchaseConfirmationEmail(order: OrderSummary, token: string): E
     }),
   };
 }
+
+/**
+ * Email 4 — itinerary changed after a post-booking repair. A provider could no
+ * longer host an activity, so one day was re-booked. Informational only: it
+ * points the client to their updated plan, and does not mention price.
+ */
+export function itineraryChangedEmail(token: string, dayNumber?: number): EmailContent {
+  const link = `${getAppBaseUrl()}/proposals/${token}`;
+  const dayPhrase = dayNumber ? `day ${dayNumber} of ` : "";
+  const bodyHtml = `
+    <p style="margin:0 0 16px 0;">A quick heads up about your trip: one of the providers on ${dayPhrase}your itinerary could no longer host their activity, so we've arranged a replacement for that day.</p>
+    <p style="margin:0 0 4px 0;">The rest of your trip is unchanged. Your updated day by day plan, with the new activity, is ready to view online.</p>
+    ${renderCtaButton("View my updated itinerary", link)}
+    <p style="margin:14px 0 0 0; font-family:${T.SANS}; font-size:13px; line-height:1.5; color:${T.MUTED};">
+      Everything else, your stays, your dates, and the other days, stays exactly as you booked it. If you have any questions, just reply to this email.
+    </p>
+  `;
+  return {
+    subject: "A small change to your Rumbo itinerary",
+    html: renderLayout({
+      preheader: "One activity changed; we've arranged a replacement. Open to see your updated plan.",
+      eyebrow: "Itinerary update",
+      headline: "We've updated one day of your trip",
+      bodyHtml,
+    }),
+  };
+}

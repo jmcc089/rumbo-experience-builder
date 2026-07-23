@@ -112,6 +112,21 @@ export interface RequestContext {
   prefs_json: ClientPrefs;
 }
 
+/** The paying client's email + itinerary token for an order, for notifications. */
+export async function getOrderClientContact(
+  orderId: string
+): Promise<{ email: string; token: string } | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT cr.email, cr.token
+     FROM orders o JOIN client_requests cr ON cr.id = o.request_id
+     WHERE o.id = $1`,
+    [orderId]
+  );
+  if (!rows[0]) return null;
+  return { email: rows[0].email, token: rows[0].token };
+}
+
 export async function getRequestContextForOrder(orderId: string): Promise<RequestContext | null> {
   const pool = getPool();
   const { rows } = await pool.query(

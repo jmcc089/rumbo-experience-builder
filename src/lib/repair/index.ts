@@ -16,11 +16,14 @@ import {
   getOrderItems,
   getDisruptibleItems,
   getRequestContextForOrder,
+  getOrderClientContact,
   markItemDisrupted,
   markItemBooked,
   applyRepair,
   DisruptibleItem,
 } from "./store";
+
+export { getOrderClientContact };
 
 function addDays(isoDate: string, days: number): string {
   const d = new Date(`${isoDate}T00:00:00Z`);
