@@ -36,10 +36,52 @@
   border-left: 1px solid rgba(255, 255, 255, 0.28);
 }
 
-.main {
+/* Body: centered container holding the sidebar + main content side by side. */
+.body {
   max-width: 1160px;
   margin: 0 auto;
-  padding: 28px 24px 72px;
+  padding: 0 24px;
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+/* Left sidebar nav */
+.sidebar {
+  flex: 0 0 188px;
+  position: sticky;
+  top: 24px;
+  padding-top: 28px;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.navLink {
+  display: block;
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 10px);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.navLink:hover {
+  background: var(--pale);
+  color: var(--navy);
+}
+.navLinkActive,
+.navLinkActive:hover {
+  background: var(--cobalt);
+  color: #fff;
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 28px 0 72px;
 }
 
 .pageHead {
@@ -195,6 +237,24 @@
   color: var(--muted);
 }
 
+/* Interest tags (customers table) */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cobalt);
+  background: var(--pale);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
 /* Status pills */
 .pill {
   display: inline-block;
@@ -288,6 +348,166 @@
   margin-top: 4px;
 }
 
+/* ─── Add-business form (Providers section) ─────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.input,
+.select {
+  width: 100%;
+  font-size: 15px;
+  color: var(--navy);
+  background: #fff;
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius-md, 10px);
+  padding: 9px 12px;
+  font-family: inherit;
+}
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Business-type toggle */
+.segmented {
+  display: inline-flex;
+  background: var(--pale);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 3px;
+}
+.segBtn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 7px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.segBtnActive {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Open-day chips */
+.dayRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dayChip {
+  border: 1px solid var(--pale-line);
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dayChipActive {
+  border-color: var(--cobalt);
+  background: var(--cobalt);
+  color: #fff;
+}
+
+/* Advanced / personalization disclosure */
+.advanced {
+  border: 1px solid var(--pale-line);
+  border-radius: var(--radius-md, 10px);
+  padding: 0 14px;
+}
+.advancedSummary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  padding: 12px 0;
+  list-style: none;
+}
+.advancedSummary::-webkit-details-marker {
+  display: none;
+}
+.advancedSummary::before {
+  content: "+ ";
+  color: var(--cobalt);
+  font-weight: 700;
+}
+.advanced[open] .advancedSummary::before {
+  content: "− ";
+}
+.advanced[open] .advancedSummary {
+  border-bottom: 1px solid var(--pale-line);
+  margin-bottom: 14px;
+}
+.advanced[open] {
+  padding-bottom: 16px;
+}
+
+/* Submit row */
+.submitRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.submitBtn {
+  background: var(--cobalt);
+  color: #fff;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 11px 26px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.formMsg {
+  font-size: 14px;
+  font-weight: 500;
+}
+.formMsgOk {
+  color: #1f7a4d;
+}
+.formMsgErr {
+  color: #c0362c;
+}
+
 /* Empty state */
 .emptyCard {
   background: #fff;
@@ -308,6 +528,27 @@
 }
 
 @media (max-width: 900px) {
+  .body {
+    flex-direction: column;
+    gap: 0;
+  }
+  .sidebar {
+    position: static;
+    flex: none;
+    width: 100%;
+    padding-top: 20px;
+  }
+  .nav {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+  }
+  .navLink {
+    white-space: nowrap;
+  }
+  .main {
+    padding-top: 16px;
+  }
   .columns {
     grid-template-columns: 1fr;
   }

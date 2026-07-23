@@ -57,7 +57,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   return { activeRequests, awaitingClient, confirmedTrips, marginThisMonth };
 }
 
-export type RequestStatus = "building" | "proposals_ready" | "paid" | "expired";
+export type RequestStatus =
+  | "building"
+  | "awaiting_providers"
+  | "proposals_ready"
+  | "no_availability"
+  | "paid"
+  | "expired";
 
 export interface RecentRequestRow {
   id: string;
@@ -104,6 +110,69 @@ export async function getRecentRequests(limit = 12): Promise<RecentRequestRow[]>
       status: r.status,
       value: paid ? Number(r.client_price) : Number(r.budget_total),
       is_paid_value: paid,
+      created_at:
+        typeof r.created_at === "string" ? r.created_at : r.created_at.toISOString(),
+    };
+  });
+}
+
+export interface CustomerRow {
+  id: string;
+  name: string;
+  email: string;
+  arrival_date: string;
+  departure_date: string;
+  travelers: number;
+  budget_total: number;
+  paid_total: number | null;
+  status: RequestStatus;
+  interests: string[];
+  pace: string | null;
+  group_composition: string | null;
+  created_at: string;
+}
+
+/**
+ * All customers with their trip data, newest first, for the Customers section.
+ * One row per client_request. `paid_total` is set once the trip is booked.
+ */
+export async function getCustomers(limit = 200): Promise<CustomerRow[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT cr.id, cr.email,
+            COALESCE(cr.name, cr.prefs_json->>'contact_name') AS name,
+            cr.arrival_date, cr.departure_date, cr.travelers,
+            cr.budget_total, cr.status, cr.prefs_json, cr.created_at,
+            o.client_price
+     FROM client_requests cr
+     LEFT JOIN LATERAL (
+       SELECT client_price FROM orders o
+       WHERE o.request_id = cr.id
+       ORDER BY o.created_at DESC LIMIT 1
+     ) o ON true
+     ORDER BY cr.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows.map((r) => {
+    const prefs = (r.prefs_json ?? {}) as {
+      interests?: string[];
+      pace?: string;
+      group_composition?: string;
+    };
+    return {
+      id: r.id,
+      name: r.name ?? "",
+      email: r.email,
+      arrival_date: toDateString(r.arrival_date),
+      departure_date: toDateString(r.departure_date),
+      travelers: Number(r.travelers),
+      budget_total: Number(r.budget_total),
+      paid_total: r.client_price != null ? Number(r.client_price) : null,
+      status: r.status,
+      interests: Array.isArray(prefs.interests) ? prefs.interests : [],
+      pace: prefs.pace ?? null,
+      group_composition: prefs.group_composition ?? null,
       created_at:
         typeof r.created_at === "string" ? r.created_at : r.created_at.toISOString(),
     };
