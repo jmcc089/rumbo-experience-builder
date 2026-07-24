@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter as useNavRouter } from "next/navigation";
 import type { AvailabilityRequest, BookedService, HistoryItem, ProviderInbox } from "@/lib/provider";
-import { respondToRequest, reportCannotDeliver } from "./actions";
+import { respondToRequest } from "./actions";
 import styles from "./provider.module.css";
 
 /**
@@ -176,9 +176,8 @@ function BookedServices({
         <span className={styles.count}>{bookings.length}</span>
       </div>
       <p className={styles.sectionSub}>
-        Trips a traveler already paid for, confirmed and yours to deliver. If you can no longer
-        host one, use &ldquo;Can&rsquo;t deliver this&rdquo; and Rumbo re-books that day with
-        another provider.
+        Trips a traveler already paid for, confirmed and yours to deliver, with the net rate
+        you will be paid for each one.
       </p>
 
       {bookings.length === 0 ? (
@@ -192,7 +191,7 @@ function BookedServices({
       ) : (
         <div className={styles.cardGrid}>
           {bookings.map((b) => (
-            <BookedCard key={b.orderItemId} booking={b} providerId={providerId} />
+            <BookedCard key={b.orderItemId} booking={b} />
           ))}
         </div>
       )}
@@ -200,36 +199,9 @@ function BookedServices({
   );
 }
 
-type DeliverState = "idle" | "confirming" | "repaired" | "failed" | "error";
-
-function BookedCard({ booking, providerId }: { booking: BookedService; providerId: string }) {
-  const router = useNavRouter();
-  const [state, setState] = useState<DeliverState>("idle");
-  const [reason, setReason] = useState<string>("");
-  const [isPending, startTransition] = useTransition();
-
-  function confirmDropout() {
-    startTransition(async () => {
-      const res = await reportCannotDeliver(providerId, booking.orderItemId, booking.orderId);
-      if (!res.ok) {
-        setState("error");
-        return;
-      }
-      if (res.repaired) {
-        setState("repaired");
-        // Refresh so the now-replaced job drops off the list.
-        router.refresh();
-      } else {
-        setReason(res.reason);
-        setState("failed");
-      }
-    });
-  }
-
-  const done = state === "repaired";
-
+function BookedCard({ booking }: { booking: BookedService }) {
   return (
-    <article className={`${styles.card} ${done ? styles.cardAnswered : ""}`}>
+    <article className={styles.card}>
       <div className={styles.cardTop}>
         <span className={styles.ticket}>{booking.ticket}</span>
         <span className={styles.bookedTag}>Paid</span>
@@ -260,54 +232,6 @@ function BookedCard({ booking, providerId }: { booking: BookedService; providerI
         <span className={styles.payLabel}>You&rsquo;ll be paid</span>
         <span className={styles.payAmount}>${booking.netRateTotal.toLocaleString()}</span>
       </div>
-
-      {state === "idle" && (
-        <div className={styles.actions}>
-          <button className={styles.declineBtn} onClick={() => setState("confirming")}>
-            Can&rsquo;t deliver this
-          </button>
-        </div>
-      )}
-
-      {state === "confirming" && (
-        <div className={styles.confirmBlock}>
-          <p className={styles.confirmNote}>
-            Rumbo will re-book this day with another provider and this job leaves your list. Continue?
-          </p>
-          <div className={styles.actions}>
-            <button
-              className={styles.declineBtn}
-              onClick={confirmDropout}
-              disabled={isPending}
-            >
-              {isPending ? "Re-booking…" : "Yes, I can't deliver"}
-            </button>
-            <button
-              className={styles.keepBtn}
-              onClick={() => setState("idle")}
-              disabled={isPending}
-            >
-              Keep it
-            </button>
-          </div>
-        </div>
-      )}
-
-      {state === "repaired" && (
-        <div className={`${styles.resultBanner} ${styles.resultConfirmed}`}>
-          Re-booked with another provider ✓
-        </div>
-      )}
-      {state === "failed" && (
-        <div className={`${styles.resultBanner} ${styles.resultError}`}>
-          Couldn&rsquo;t re-book: {reason}
-        </div>
-      )}
-      {state === "error" && (
-        <div className={`${styles.resultBanner} ${styles.resultError}`}>
-          Something went wrong — try again
-        </div>
-      )}
     </article>
   );
 }

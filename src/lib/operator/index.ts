@@ -4,7 +4,6 @@ export {
   getRecentRequests,
   getCustomers,
   getProviderResponsePanel,
-  getOrdersForRepair,
 } from "./store";
 export type {
   DashboardMetrics,
@@ -12,5 +11,4 @@ export type {
   CustomerRow,
   RequestStatus,
   ProviderResponsePanel,
-  OrderRepairRow,
 } from "./store";

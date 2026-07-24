@@ -1,8 +1,7 @@
 // Rumbo · SBI-05: Temporal CSP + scoring engine
 //
-// Two entry points:
+// One entry point:
 //   assemble(problem) → up to 3 distinct valid itineraries
-//   repair(problem)   → re-solve one gap day in a paid itinerary
 //
 // All logic is deterministic application code. No LLM, no Math.random().
 // Availability must be pre-confirmed by the caller (SBI-04); this module
@@ -76,28 +75,6 @@ export interface AssembleProblem {
 export interface AssembleResult {
   proposals: ItinerarySnapshot[];
   shortfall?: string; // set when fewer than 3 distinct itineraries found
-}
-
-export interface RepairProblem {
-  paidItinerary: ItinerarySnapshot;
-  gapDayIndex: number; // 1-based
-  travelers: number;
-  weights: ScoringWeights;
-  candidatePool: CandidateExperience[];
-  transferMatrix: TransferMatrix[];
-  lodgingPool: Lodging[];
-  arrivalTime: string;
-  departureTime: string;
-  dates: string[];
-  budgetTotal: number;
-  interests: ExperienceCategory[];
-  pace: "relaxed" | "moderate" | "packed";
-  mornings: "early_ok" | "no_early";
-}
-
-export interface RepairResult {
-  replacement: ItinerarySnapshot | null;
-  reason?: string;
 }
 
 export interface ValidityResult {
@@ -685,166 +662,6 @@ export function assemble(problem: AssembleProblem): AssembleResult {
       : undefined;
 
   return { proposals, shortfall };
-}
-
-// ─── repair ───────────────────────────────────────────────────────────────────
-
-export function repair(problem: RepairProblem): RepairResult {
-  const {
-    paidItinerary,
-    gapDayIndex,
-    travelers,
-    weights,
-    candidatePool,
-    transferMatrix,
-    lodgingPool,
-    arrivalTime,
-    departureTime,
-    dates,
-    budgetTotal,
-    interests,
-    pace,
-    mornings,
-  } = problem;
-
-  const transferMap = buildTransferMap(transferMatrix);
-  const expMap = new Map(candidatePool.map((e) => [e.id, e]));
-  const lodgingMap = new Map(lodgingPool.map((l) => [l.id, l]));
-
-  const numDays = paidItinerary.days.length;
-  const gapIdx0 = gapDayIndex - 1;
-  const gapDay = paidItinerary.days[gapIdx0];
-
-  if (!gapDay) {
-    return { replacement: null, reason: `Day ${gapDayIndex} not found in paid itinerary` };
-  }
-
-  const date = dates[gapIdx0] ?? dates[dates.length - 1];
-  const isFirstDay = gapIdx0 === 0;
-  const isLastDay = gapIdx0 === numDays - 1;
-  const noEarly = mornings === "no_early";
-
-  // Cost of all other days (fixed)
-  let fixedNet = 0;
-  const usedIds = new Set<string>();
-  for (let di = 0; di < numDays; di++) {
-    if (di === gapIdx0) continue;
-    const d = paidItinerary.days[di];
-    for (const se of d.experiences) {
-      const exp = expMap.get(se.experience_id);
-      if (exp) fixedNet += num(exp.net_price) * travelers;
-      usedIds.add(se.experience_id);
-    }
-    const lodging = lodgingMap.get(d.lodging_id);
-    if (lodging) fixedNet += num(lodging.net_price_per_night);
-  }
-
-  // Lodging cost for the gap day (kept; only experiences are replaced)
-  const gapLodging = lodgingMap.get(gapDay.lodging_id);
-  const gapLodgingCost = gapLodging ? num(gapLodging.net_price_per_night) : 0;
-
-  const inboundTransferMin =
-    gapIdx0 > 0
-      ? getTransferMin(paidItinerary.days[gapIdx0 - 1].zone_id, gapDay.zone_id, transferMap)
-      : 0;
-
-  const dayStartMin = isFirstDay
-    ? parseTime(arrivalTime)
-    : DEFAULT_DAY_START_MIN + inboundTransferMin;
-  const dayEndMin = isLastDay ? parseTime(departureTime) : DEFAULT_DAY_END_MIN;
-
-  // Available experience budget for the gap day
-  const paceMaxExp: Record<string, number> = { relaxed: 2, moderate: 3, packed: 4 };
-  const maxExpPerDay = paceMaxExp[pace] ?? 3;
-
-  const available = candidatePool.filter((e) => {
-    if (usedIds.has(e.id)) return false;
-    if (!isOpenOnDay(e, date)) return false;
-    const ifAdded = applyMarkup(fixedNet + gapLodgingCost + num(e.net_price) * travelers);
-    return ifAdded <= budgetTotal;
-  });
-
-  if (available.length === 0) {
-    return { replacement: null, reason: "No available experiences fit the gap constraints" };
-  }
-
-  const sorted = [...available].sort((a, b) => {
-    const ai = interests.includes(a.category) ? 0 : 1;
-    const bi2 = interests.includes(b.category) ? 0 : 1;
-    return ai - bi2;
-  });
-
-  const { scheduledExps, totalTransferMin } = fillDay(
-    date,
-    dayStartMin,
-    dayEndMin,
-    gapDay.zone_id,
-    noEarly,
-    sorted,
-    transferMap,
-    maxExpPerDay
-  );
-
-  if (scheduledExps.length === 0) {
-    return {
-      replacement: null,
-      reason: "No experiences could be scheduled in the available time window",
-    };
-  }
-
-  // Build repaired snapshot
-  const newDays: ItineraryDay[] = paidItinerary.days.map((d, di) => {
-    if (di !== gapIdx0) return d;
-    return {
-      day_index: d.day_index,
-      zone_id: d.zone_id,
-      lodging_id: d.lodging_id,
-      experiences: scheduledExps.map(({ experience, startMin, endMin }) => ({
-        experience_id: experience.id,
-        start_time: formatTime(startMin),
-        end_time: formatTime(endMin),
-      })),
-      transfer_in_minutes: inboundTransferMin,
-    };
-  });
-
-  let newNet = fixedNet + gapLodgingCost;
-  for (const { experience } of scheduledExps) newNet += num(experience.net_price) * travelers;
-
-  // Rebuild DayPlans for scoring
-  const allDayPlans: DayPlan[] = newDays.map((d, di) => {
-    const items: ScheduledItem[] = d.experiences.map((se) => {
-      const exp =
-        expMap.get(se.experience_id) ??
-        candidatePool.find((e) => e.id === se.experience_id);
-      return {
-        experience: exp!,
-        startMin: parseTime(se.start_time),
-        endMin: parseTime(se.end_time),
-      };
-    }).filter((item) => item.experience != null);
-
-    return {
-      dayIndex: d.day_index,
-      date: dates[di] ?? date,
-      zoneId: d.zone_id,
-      lodgingId: d.lodging_id,
-      scheduledExperiences: items,
-      totalTransferMin: di === gapIdx0 ? totalTransferMin : 0,
-      inboundTransferMin: d.transfer_in_minutes,
-    };
-  });
-
-  const scores = scoreItinerary(allDayPlans, interests, pace, weights);
-
-  return {
-    replacement: {
-      days: newDays,
-      net_total: round2(newNet),
-      client_total: round2(applyMarkup(newNet)),
-      scores,
-    },
-  };
 }
 
 // ─── Validity checker (exported for testing) ──────────────────────────────────

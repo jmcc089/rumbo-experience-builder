@@ -427,39 +427,6 @@
   padding: 3px 10px;
   border-radius: 999px;
 }
-.confirmBlock {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.confirmNote {
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.45;
-}
-.confirmBlock .actions {
-  margin-top: 0;
-}
-.keepBtn {
-  flex: 1;
-  padding: 11px 12px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  background: var(--navy);
-  color: #fff;
-  transition: background 0.15s ease;
-}
-.keepBtn:hover:not(:disabled) {
-  background: #2a3a5c;
-}
-.keepBtn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 
 /* Empty states */
 .emptyCard {

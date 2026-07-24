@@ -48,7 +48,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     `SELECT COALESCE(sum(oi.net_price), 0)::numeric AS net
      FROM order_items oi
      JOIN orders o ON oi.order_id = o.id
-     WHERE oi.status <> 'disrupted'
+     WHERE oi.status = 'booked'
        AND date_trunc('month', o.created_at) = date_trunc('month', now())`
   );
   const netThisMonth = Number(netRows[0]?.net ?? 0);
@@ -177,47 +177,6 @@ export async function getCustomers(limit = 200): Promise<CustomerRow[]> {
         typeof r.created_at === "string" ? r.created_at : r.created_at.toISOString(),
     };
   });
-}
-
-export interface OrderRepairRow {
-  id: string;
-  email: string;
-  client_price: number;
-  created_at: string;
-  disrupted_count: number;
-  replaced_count: number;
-  booked_experience_count: number;
-}
-
-/**
- * Paid orders for the repair demo panel (SBI-13): the trigger surface for
- * "simulate disruption" / "repair" actions. Read-only aggregate of
- * order_items status counts per order.
- */
-export async function getOrdersForRepair(limit = 8): Promise<OrderRepairRow[]> {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT o.id, cr.email, o.client_price, o.created_at,
-            count(*) FILTER (WHERE oi.status = 'disrupted' AND oi.item_type = 'experience')::int AS disrupted_count,
-            count(*) FILTER (WHERE oi.status = 'replaced' AND oi.item_type = 'experience')::int AS replaced_count,
-            count(*) FILTER (WHERE oi.status = 'booked' AND oi.item_type = 'experience')::int AS booked_experience_count
-     FROM orders o
-     JOIN client_requests cr ON cr.id = o.request_id
-     LEFT JOIN order_items oi ON oi.order_id = o.id
-     GROUP BY o.id, cr.email, o.client_price, o.created_at
-     ORDER BY o.created_at DESC
-     LIMIT $1`,
-    [limit]
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    email: r.email,
-    client_price: Number(r.client_price),
-    created_at: toDateString(r.created_at),
-    disrupted_count: r.disrupted_count,
-    replaced_count: r.replaced_count,
-    booked_experience_count: r.booked_experience_count,
-  }));
 }
 
 export interface ProviderResponsePanel {

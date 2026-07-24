@@ -121,7 +121,7 @@ export interface Order {
   created_at: string;
 }
 
-export type OrderItemStatus = "booked" | "disrupted" | "replaced";
+export type OrderItemStatus = "booked";
 
 export interface OrderItem {
   id: string;

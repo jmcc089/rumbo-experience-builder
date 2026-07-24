@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   ref_id     text    NOT NULL,
   day_index  integer NOT NULL,
   net_price  numeric NOT NULL,
-  status     text    NOT NULL DEFAULT 'booked'  -- 'booked'|'disrupted'|'replaced'
+  status     text    NOT NULL DEFAULT 'booked'  -- 'booked'
 );
 
 -- Provider portal responses (SBI-11). The provider-facing surface of the
