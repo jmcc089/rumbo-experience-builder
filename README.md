@@ -1,4 +1,4 @@
-# Rumbo: An Itinerary Engine for  Tours
+# Rumbo: An Itinerary Engine for tours in El Salvador
 
 > Rumbo turns one client request (dates, party, budget, and a free-text description) into 3 complete, distinct, valid, optimized multi-day itineraries (activities, transfers, meals, lodging) through a temporal constraint-satisfaction and weighted-scoring engine written in application code, not an LLM prompt. The LLM is fenced to a narrow role: deterministic code has final say on validity, pricing, and availability.
 
