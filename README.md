@@ -15,7 +15,7 @@ A boutique inbound tour operator in El Salvador sells multi-day trips to US trav
 
 1. **Takes one intake.** Dates, party size, budget, preference dropdowns, and one free-text description.
 2. **Filters the catalog.** By category, operating days, and price with markup against the stated budget.
-3. **Opens an acceptance window.** Each matched experience asks its provider to accept or decline; any request left unanswered is settled at a flat rate when the 90-second window closes.
+3. **Resolves provider availability.** Each matched experience is settled by a simulated responder at a flat 80% accept rate, in the same run as the match.
 4. **Validates that each day is actually possible.** Transfers between zones, operating hours, sunrise and tide dependencies, and no early starts when the traveler ruled them out.
 5. **Scores and assembles.** Five weighted metrics produce the top 3 deliberately distinct itineraries.
 6. **Emails a link to compare and book.** The hold starts when the client opens the link, not when it is sent.
@@ -25,7 +25,7 @@ A boutique inbound tour operator in El Salvador sells multi-day trips to US trav
 
 - **Client** — the public landing page and the three-step intake that starts everything: dates, party size, budget, preference dropdowns, and one free-text description of the trip they picture. → https://rumbo-experience-builder.vercel.app
 - **Operator** — Rumbo's own view: margin on every order, incoming requests and their status, and the full provider catalog with inline editing. → https://rumbo-experience-builder.vercel.app/operator
-- **Provider** — what a local business sees: it works its own inbox, manages its own services and prices, and edits its own profile. It only ever sees its net rate, never the client price. Use "Viewing as" at the bottom of the sidebar to switch between businesses. → https://rumbo-experience-builder.vercel.app/provider
+- **Provider** — what a local business sees: its booked jobs and the history of how its requests resolved, plus its own services, prices, and profile to manage. It only ever sees its net rate, never the client price. Use "Viewing as" at the bottom of the sidebar to switch between businesses. → https://rumbo-experience-builder.vercel.app/provider
 
 ---
 
@@ -43,7 +43,7 @@ That combination is real backend logic, and it has to be verifiable. Handing it 
 
 - One intake produces **3 complete, distinct, valid, scored** multi-day itineraries covering activities, transfers, meals, and lodging.
 - A coarse match filter over the catalog: category, operating days, and price with markup against the stated budget.
-- Per-request provider availability as a real acceptance window: each matched experience opens a request the provider can accept or decline from its portal, and any request left unanswered is settled by a simulated responder at a flat 80% accept rate once the 90-second window closes.
+- Per-request provider availability resolved synchronously: every matched experience is settled by a simulated responder at a flat 80% accept rate, and the provider portal keeps a read-only record of how each request resolved.
 - Temporal CSP validity: feasible transfers, operating hours, sunrise and tide dependencies, and no early starts when the traveler rules them out.
 - Weighted scoring across 5 metrics, with the top 3 selected under a distinctness guarantee.
 - A proposal hold that starts when the client **opens** the link, not when it is sent.
@@ -77,7 +77,7 @@ Days that share a zone share a base, and that base fixes the next day's starting
 `MARKUP_RATE = 0.30` lives in exactly one place, the budget is validated against the marked-up price, and providers only ever see net. The business model is load-bearing for the pricing logic, so the rate cannot be inlined anywhere. One constant is the only way the net and client surfaces stay provably separate.
 
 **ADR-6 · Determinism is scoped to the engine; the simulated availability is deliberately random.**
-The assembly and scoring engine is fully deterministic: given the same request and the same set of accepted experiences, it always returns the same itineraries, using seeded FNV-1a hashing and no `Math.random()`, which makes the core logic testable and debuggable. The randomness in the system is intentional and lives outside the engine. When a provider does not answer within the acceptance window, a simulated responder accepts at a flat 80% through `Math.random()`, modeling the real-world uncertainty of whether a provider is free. Two identical requests can therefore land on different accepted sets, but each accepted set assembles into one fixed, reproducible result.
+The assembly and scoring engine is fully deterministic: given the same request and the same set of accepted experiences, it always returns the same itineraries, using seeded FNV-1a hashing and no `Math.random()`, which makes the core logic testable and debuggable. The randomness in the system is intentional and lives outside the engine. Every matched experience is settled by a simulated responder that accepts at a flat 80% through `Math.random()`, modeling the real-world uncertainty of whether a provider is free. Two identical requests can therefore land on different accepted sets, but each accepted set assembles into one fixed, reproducible result.
 
 **ADR-7 · Per-request confirmation lives in an ephemeral cache, materialized to the database only on payment.**
 Proposals sit in `proposal_cache` under a one-hour hold that starts when the client first opens the link, not when the email goes out. Only real purchases (simulated) should ever touch permanent tables. Starting the clock on send would punish a client for opening the email late, so the hold begins on view and is idempotent from then on.
@@ -103,33 +103,25 @@ The operator's Cancel order removes the request and everything downstream of it 
 **ADR-14 · Transport is modeled as time, not as a bookable service.**
 `transfer_matrix` carries travel minutes between all 13 zones, and the engine uses it for feasibility and day-window fit. It has no cost, no provider, and no line in `order_items`. Transport time is what makes a day possible or impossible, and that is the constraint the engine exists to solve. Transport as a purchasable service is a separate business decision that would touch pricing, assembly, order items, and the client itinerary view without changing the scheduling logic at all. A complete version would add an intake field asking whether the traveler needs transport, routing to a full-service driver, a car rental provider, or nothing, and that runs into the same ownership gap as lodging in ADR-12, since no transport supplier exists as an entity. The lighter path, given that `transfer_matrix` already holds minutes per zone pair, is a flat or per-minute rate folded into the client price and shown as a line in the itinerary, with no provider confirming it.
 
-**ADR-15 · Provider availability is a two-phase flow with a real acceptance window, not a synchronous roll.**
-When an intake arrives, phase one runs synchronously: the match filter selects candidate experiences and opens a real availability request for each, starting a 90-second acceptance window. No proposals are built yet. During the window, a provider can accept or decline from its portal inbox. Phase two runs once the window has closed: any request the provider did not answer is settled by a simulated responder that accepts at a flat 80% rate, and only then are proposals assembled from the accepted set, scored, and emailed. A synchronous roll would have been simpler, but it turns the provider portal's accept and decline into decoration, since the trip would already be built before a provider could answer. Splitting the flow lets a real acceptance and a simulated one share exactly one finalize path.
-
-**ADR-16 · The acceptance window is closed on read, not by a scheduler.**
-Something has to notice that a window expired, and $0 serverless has no always-on process to watch the clock. A GitHub Actions cron was built first and then removed: GitHub does not honour its own schedule cadence, so runs landed roughly an hour apart instead of every five minutes, and the workflow had grown a 55-minute polling loop to paper over the gap. Windows still closed late, and a demo run took over ten minutes end to end. The window is now closed lazily instead. Every surface that reads a request finalizes it first if the window has passed, which means the client's own status page, already polling every few seconds while they wait, is what closes the window, within seconds of expiry and with no scheduler, no shared secret, and no external service. Concurrent readers are handled by an atomic claim that pushes the window out rather than flipping a status, so exactly one reader finalizes and a finalize that throws becomes due again instead of stranding the request. The honest cost is that a request nobody ever looks at stays open, which is why the operator dashboard sweeps for due requests before it reports on them. Submit to proposals is now about 99 seconds, measured end to end.
+**ADR-15 · Provider availability is resolved synchronously, in the same run as the match.**
+One pipeline run matches the catalog, settles every matched experience through a simulated responder that accepts at a flat 80% rate, and assembles proposals from the accepted set. Submit to proposals takes one to two seconds, measured end to end. An acceptance window was built first, on the premise that a provider would answer in real time from a portal inbox, and that premise does not survive contact with the timings: nobody is watching an inbox during the couple of seconds a request takes to resolve, so accept and decline were decorative buttons and the window bought nothing but latency. Removing it also removes everything that existed only to close it. The provider portal keeps "Recent history" as a read-only record of how each request resolved. The honest cost is that acceptance is now entirely simulated, with no path for a real one: reaching a provider for a genuine answer needs a channel they already watch, such as a mobile app with push notifications, which is a different mechanism from a web inbox and a countdown.
 
 ### Pipeline
 
 ```text
-PHASE 1 — on intake (synchronous)
+ON INTAKE — one synchronous run, fired via after()
 1. Intake saved (status: building) ────────────────▶ Email 1 (acknowledgment)
 2. MATCH FILTER (catalog): category · open days · price-with-markup ≤ budget
-3. OPEN AVAILABILITY: one request per matched experience → a 90-second acceptance window opens.
-      During the window, providers accept or decline from their portal inbox.
+3. RESOLVE: every matched experience settled by a simulated responder at a flat 80% accept
+4. CSP VALIDATION: feasible transfers · operating hours · sunrise/tide deps · no-early-mornings
+5. SCORING + ASSEMBLY: 5 weighted metrics → top-3 DISTINCT itineraries → apply markup
+6. Proposals ready ────────────────────────────────▶ Email 2 (link to /proposals/{token})
 
-PHASE 2 — after the window closes (triggered by the next read of the request)
-4. RESOLVE: any request left unanswered is settled by a simulated responder at a flat 80% accept
-5. CSP VALIDATION: feasible transfers · operating hours · sunrise/tide deps · no-early-mornings
-6. SCORING + ASSEMBLY: 5 weighted metrics → top-3 DISTINCT itineraries → apply markup
-7. Proposals ready ────────────────────────────────▶ Email 2 (link to /proposals/{token})
+7. Client opens link → 1-hour hold starts ON VIEW → picks one → simulated pay
+8. Order materialized to DB ───────────────────────▶ Email 3 (confirmation)
 
-8. Client opens link → 1-hour hold starts ON VIEW → picks one → simulated pay
-9. Order materialized to DB ───────────────────────▶ Email 3 (confirmation)
-
-No scheduler: the window is closed on read. Every page that displays a request finalizes it
-first if the window has passed, so the client's status page, already polling while they wait,
-is what closes it. The operator dashboard sweeps requests nobody came back to.
+No acceptance window and no scheduler: steps 2 through 6 are one call, about one to two
+seconds end to end. The client's status page polls only to notice that it already finished.
 ```
 
 **The engine:** `assemble(problem)` is the single entry point over the CSP and scoring core. It fills every day of a new trip and returns up to 3 valid, distinct (Jaccard similarity < 0.6), scored proposals.
@@ -145,7 +137,7 @@ Eleven tables, split into a catalog and a transactional set.
 | **Catalog** | `zones`, `transfer_matrix`, `providers`, `experiences`, `lodging`, `provider_personalization` | The world: zones and zone-level travel times, providers (reliability and popularity signals), experiences (hours, duration, net price per person, capacity, dependency), lodging tiers, and provider capability answers |
 | **Request** | `client_requests`, `proposal_cache` | The intake, with preferences and the persisted LLM extraction, plus the ephemeral 3-proposal hold that starts on first view and is never a booking |
 | **Order** | `orders`, `order_items` | Written only on a completed purchase. `order_items` carries one row per booked experience and lodging night at its net price, which is what the operator's margin is derived from |
-| **Provider** | `provider_responses` | Confirm or decline captured from the provider portal, holding `net_rate` only and never the client price |
+| **Provider** | `provider_responses` | How each matched experience resolved, confirmed or declined, holding `net_rate` only and never the client price |
 
 The catalog is seeded, but it is not read-only. The provider portal writes to `experiences`, `providers`, and `provider_personalization` when a business edits its own services, prices, or profile, and the operator writes to the same tables through inline catalog editing. Every one of those writes is scoped server-side to the provider that owns the row.
 
@@ -156,7 +148,7 @@ A portfolio build: the smallest system that proves the pattern end to end, not a
 **Out of scope by choice:**
 
 - **Real payment.** Payment is a button and a paid state, with no Stripe, no PCI surface, and no data collected (see ADR-9).
-- **A real provider communication channel.** Providers are reached through the portal and a simulated availability step, not a live channel. There is no provider chat and no WhatsApp or SMS request link. A structured portal captures confirmation as validated system data with the net rate attached, where a free-text chat would capture an unstructured message that the engine could neither price nor act on. A real build would still add a messaging layer on top, but the confirmation itself would stay structured.
+- **A real provider communication channel.** Availability is simulated rather than asked, and the portal shows a provider how its requests resolved rather than letting it answer them (see ADR-15). There is no provider chat and no WhatsApp or SMS request link. A real build would reach providers on a channel they already watch, such as a mobile app with push notifications, but the confirmation it captures would stay structured: validated system data with the net rate attached, where a free-text chat would capture an unstructured message that the engine could neither price nor act on.
 - **Rich media.** Experiences and lodging are described in text. There are no photos or videos per experience or per stay, which a real client-facing product would need to sell a trip.
 - **International flights as inventory.** Arrival and departure are context-only constraints that bound the first and last day, not booked flights.
 - **General post-sale service.** No support desk, changes, or cancellations beyond the operator's hard-delete.
@@ -188,7 +180,7 @@ These are not planned next steps. They mark where the demo's deliberate boundari
 | **Validation** | Zod | All external data, including every LLM response |
 | **AI** | DeepSeek `deepseek-v4-flash` | Narrow, fenced role: free-text constraints and personalization notes |
 | **Email** | Resend | 3 transactional emails: acknowledgment, proposals-ready, confirmation |
-| **Scheduling** | None, closed on read | Any page that reads a request closes its acceptance window first (Phase 2) |
+| **Scheduling** | None | Nothing is deferred: the whole pipeline runs in the call that fires from intake |
 | **Deploy** | Vercel | Serverless; GitHub-first, then Vercel connected to the repo |
 
 ### Request Flow
@@ -199,20 +191,14 @@ Client fills intake (name, email, dates, party, budget, prefs, free text)
    ▼
 createRequest()          → insert client_requests (status: building) → Email 1
    │
-runRequestPipeline()     → PHASE 1, synchronous:
+runRequestPipeline()     → one synchronous run:
+   extractConstraints()      DeepSeek, Zod-validated, safe-default on any error
    matchFilter()             catalog: category · open-days · price-with-markup ≤ budget
-   startAvailabilityRequests() open one provider request per matched experience,
-                               start the 90-second acceptance window
+   resolve + record          every match settled at a flat 80% accept → provider_responses
+   assemble()                CSP validity → 5-metric scoring → top-3 distinct → applyMarkup()
+   saveProposals()           proposal_cache · status=proposals_ready → Email 2 (link)
    ▼
-(providers accept or decline from their portal inbox during the window)
-   ▼
-Any read of the request  ──▶  finalizeIfDue()  (status poll · proposals page · operator sweep)
-   getDueRequestIds()    → requests whose window has closed
-   finalizeProposals()   → PHASE 2:
-      resolve()             unanswered requests settled at a flat 80% accept rate
-      extractConstraints()  DeepSeek, Zod-validated, safe-default on any error
-      assemble()            CSP validity → 5-metric scoring → top-3 distinct → applyMarkup()
-      saveProposals()       proposal_cache · status=proposals_ready → Email 2 (link)
+(the provider portal shows how each request resolved, read-only, after the fact)
    ▼
 getProposals(token)      → 1-hour hold starts on FIRST view (idempotent)
 confirmAndPay()          → insert orders + order_items (txn) → Email 3
@@ -228,11 +214,11 @@ project/src/
 │   ├── engine/        CSP validity + 5-metric scoring; assemble()
 │   ├── llm/           Zod-fenced extraction, personalization, weight derivation
 │   ├── pricing/       MARKUP_RATE, applyMarkup(); single source of truth
-│   ├── booking/       request lifecycle · two-phase availability · proposal hold · orders
+│   ├── booking/       request lifecycle · availability resolution · proposal hold · orders
 │   ├── email/         3 Resend templates + client
-│   ├── provider/      provider inbox + own catalog/profile writes (net-rate-only)
+│   ├── provider/      resolved-request history + own catalog/profile writes (net-rate-only)
 │   ├── operator/      dashboard aggregates + inline catalog editing + order cancel
-│   └── config.ts      trip-span, acceptance-window minutes, provider accept rate
+│   └── config.ts      trip-span, provider accept rate
 └── app/
     ├── (client)/
     │   ├── page.tsx       landing + photo hero + 3-step intake
@@ -245,7 +231,7 @@ project/src/
 
 ### Configuration and fail-safe behavior
 
-The system degrades instead of breaking when a dependency is missing. With no DeepSeek key the LLM falls back to deterministic defaults, so free-text extraction and personalization simply return safe values and nothing that decides feasibility or price is affected. With no Resend key every email becomes a logged no-op, so the pipeline runs end to end without sending. `DATABASE_URL` is the only hard requirement, and the schema lives in `schema.sql` while the catalog itself lives in the Neon database. Phase 2 needs no credential of its own, because nothing external triggers it: the window is closed by whichever page reads the request next.
+The system degrades instead of breaking when a dependency is missing. With no DeepSeek key the LLM falls back to deterministic defaults, so free-text extraction and personalization simply return safe values and nothing that decides feasibility or price is affected. With no Resend key every email becomes a logged no-op, so the pipeline runs end to end without sending. `DATABASE_URL` is the only hard requirement, and the schema lives in `schema.sql` while the catalog itself lives in the Neon database. Nothing external triggers the pipeline, so there is no scheduler credential and no shared secret to hold: the whole run happens inside the request that created it.
 
 ---
 
@@ -257,7 +243,7 @@ The system degrades instead of breaking when a dependency is missing. With no De
 | **LLM role** | Narrow, Zod-fenced, fail-safe | Deterministic code owns validity, pricing, and availability; the LLM can never leak into feasibility or money |
 | **Determinism** | Deterministic engine, seeded hashing, no `Math.random()` | The same request and accepted set reproduce the same itineraries; the only randomness is the deliberate provider-acceptance simulation |
 | **Pricing** | Single `applyMarkup()`, net and client partitioned | Providers never see the client price and clients never see net, an architectural invariant |
-| **Availability** | Two-phase: a real acceptance window closed on read | A genuine accept or decline in the provider portal, not a synchronous roll; unanswered requests settle at a flat 80% |
+| **Availability** | Resolved synchronously at a flat 80% accept | A window only made sense if a provider would answer inside it, and at one to two seconds nobody can; the portal keeps the record instead |
 | **Proposals** | Top 3 with Jaccard similarity < 0.6 | Three genuinely different options, not three near-duplicates |
 | **Provider portal** | Self-service, a switcher instead of a login, net-rate-only | Providers own and edit their catalog, prices, and profile, with every write scoped server-side |
-| **Async** | Lazy close plus email, no WebSockets | Fits $0 serverless with nothing always-on: the reader that finds an expired window closes it and triggers the proposals email |
+| **Async** | One synchronous run plus email, no WebSockets | Fits $0 serverless with nothing always-on: there is nothing to wait for, so the status page only polls to notice the run already finished |
