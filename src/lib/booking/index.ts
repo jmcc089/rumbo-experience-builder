@@ -2,12 +2,10 @@
 export {
   createRequest,
   runRequestPipeline,
-  finalizeRequestProposals,
   getProposals,
   confirmAndPay,
   HOLD_WINDOW_MINUTES,
 } from "./requests";
-export { finalizeDueRequests } from "./pipeline";
 export type { IntakeInput, ProposalsView, ConfirmAndPayResult, PipelineHooks, PayHooks } from "./requests";
 export { spotsConsumedByRealOrders } from "./consumption";
 export { getProposalsPageView, getRequestStatus } from "./enrich";

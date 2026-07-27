@@ -11,11 +11,7 @@ import {
   NewOrderItem,
   setRequestStatus,
 } from "./store";
-import {
-  startAvailabilityRequests,
-  finalizeProposals,
-  finalizeIfDueByToken,
-} from "./pipeline";
+import { runPipeline } from "./pipeline";
 import { sendAcknowledgment, sendPurchaseConfirmation, OrderSummary } from "../email";
 import {
   ConfirmAndPayResult,
@@ -38,29 +34,18 @@ export async function createRequest(intake: IntakeInput): Promise<CreateRequestR
 }
 
 /**
- * Phase 1 (fires from intake via `after()`): match the catalog and send a
- * pending availability request to every matching provider, then open the
- * acceptance window. Proposals are built later, when the window is closed on
- * read — see finalizeIfDue()/finalizeDueRequests() in ./pipeline.
+ * Fires from intake via `after()`: matches the catalog, resolves every matched
+ * provider immediately, and assembles proposals, all synchronously in one run.
  */
-export async function runRequestPipeline(requestId: string): Promise<void> {
-  await startAvailabilityRequests(requestId);
-}
-
-/** Phase 2: finalize one request whose acceptance window has closed. */
-export async function finalizeRequestProposals(
+export async function runRequestPipeline(
   requestId: string,
   hooks?: PipelineHooks
 ): Promise<void> {
-  await finalizeProposals(requestId, hooks);
+  await runPipeline(requestId, hooks);
 }
 
 /** Retrieves the 3 proposals for a token. Starts the 15-min hold on first call. */
 export async function getProposals(token: string): Promise<ProposalsView> {
-  // The proposals link can be opened before the status page ever closed the
-  // window (straight from email 2, or on a fresh device), so close it here too.
-  await finalizeIfDueByToken(token);
-
   const cache = await getProposalCache(token);
   if (!cache) return { status: "not_found" };
 

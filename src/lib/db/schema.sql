@@ -81,25 +81,20 @@ CREATE TABLE IF NOT EXISTS client_requests (
   budget_total     numeric     NOT NULL,
   prefs_json       jsonb       NOT NULL DEFAULT '{}',
   free_text        text        NOT NULL DEFAULT '',
-  status           text        NOT NULL DEFAULT 'building',  -- 'building'|'awaiting_providers'|'proposals_ready'|'no_availability'|'paid'|'expired'
+  status           text        NOT NULL DEFAULT 'building',  -- 'building'|'proposals_ready'|'no_availability'|'paid'|'expired'
   extraction_json  jsonb       NOT NULL DEFAULT '{}',  -- SBI-06 ExtractionOutput, persisted for reuse at pay time
-  -- When the provider-acceptance window closes. The window is closed lazily by
-  -- whichever page reads the request next, so this timestamp is the only clock
-  -- the flow has; there is no scheduler.
-  provider_window_closes_at timestamptz,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 
 -- These tables predate the SBI-07 / availability work; ALTER is needed since
 -- CREATE TABLE IF NOT EXISTS above is a no-op on an already-existing table.
 ALTER TABLE client_requests ADD COLUMN IF NOT EXISTS extraction_json jsonb NOT NULL DEFAULT '{}';
-ALTER TABLE client_requests ADD COLUMN IF NOT EXISTS provider_window_closes_at timestamptz;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS provider_instructions_json jsonb NOT NULL DEFAULT '[]';
 
--- Drives the lazy window closer's "what is due" lookup.
-CREATE INDEX IF NOT EXISTS idx_client_requests_window
-  ON client_requests (provider_window_closes_at)
-  WHERE status = 'awaiting_providers';
+-- Availability resolution is synchronous now (no acceptance window), so the
+-- window-closing clock this table and index existed for is gone.
+DROP INDEX IF EXISTS idx_client_requests_window;
+ALTER TABLE client_requests DROP COLUMN IF EXISTS provider_window_closes_at;
 
 -- Ephemeral proposal + hold cache (SBI-07). NOT a permanent booking: the 15-min
 -- hold only starts on first `getProposals` read (first_viewed_at); rows past
@@ -133,20 +128,29 @@ CREATE TABLE IF NOT EXISTS order_items (
   status     text    NOT NULL DEFAULT 'booked'  -- 'booked'
 );
 
--- Provider portal responses (SBI-11). The provider-facing surface of the
--- simulated availability step: when a provider confirms/declines an incoming
--- availability request, the response is captured here as system data. The
--- deterministic pipeline (SBI-04/07) remains the authority for actual
--- assembly; this table records the human-visible confirm/decline for the demo
--- and gives the portal persistent state + history across reloads.
--- `net_rate` stores the provider NET amount only — never the client price.
+-- Provider portal responses (SBI-11). One row per matched experience per
+-- request, resolved by the simulated responder in the same pipeline run as
+-- the match — there is no pending state. This table is the provider portal's
+-- read-only record of how each request resolved, not something a provider
+-- writes to. `net_rate` stores the provider NET amount only — never the
+-- client price.
 CREATE TABLE IF NOT EXISTS provider_responses (
-  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_id   uuid        NOT NULL REFERENCES client_requests(id),
-  experience_id text       NOT NULL REFERENCES experiences(id),
-  provider_id  text        NOT NULL REFERENCES providers(id),
-  decision     text        NOT NULL,  -- 'confirmed'|'declined'
-  net_rate     numeric     NOT NULL,  -- provider net total for the group; never the client price
-  decided_at   timestamptz NOT NULL DEFAULT now(),
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id    uuid        NOT NULL REFERENCES client_requests(id),
+  experience_id text        NOT NULL REFERENCES experiences(id),
+  provider_id   text        NOT NULL REFERENCES providers(id),
+  status        text        NOT NULL CHECK (status IN ('confirmed', 'declined')),
+  net_rate      numeric     NOT NULL,  -- provider net total for the group; never the client price
+  requested_at  timestamptz NOT NULL DEFAULT now(),
+  decided_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (request_id, experience_id)
 );
+
+-- Upgrades an existing table from the earlier pending/window-based shape:
+-- resolution is synchronous now, so every row is inserted already decided,
+-- the 'pending' default is gone, and the check narrows to match.
+ALTER TABLE provider_responses ALTER COLUMN status DROP DEFAULT;
+ALTER TABLE provider_responses ALTER COLUMN decided_at SET NOT NULL;
+ALTER TABLE provider_responses DROP CONSTRAINT IF EXISTS provider_responses_status_chk;
+ALTER TABLE provider_responses ADD CONSTRAINT provider_responses_status_chk
+  CHECK (status IN ('confirmed', 'declined'));

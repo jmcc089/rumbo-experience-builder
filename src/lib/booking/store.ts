@@ -104,71 +104,10 @@ export async function saveExtraction(requestId: string, extraction: ExtractionOu
 
 export async function setRequestStatus(
   requestId: string,
-  status:
-    | "building"
-    | "awaiting_providers"
-    | "proposals_ready"
-    | "no_availability"
-    | "paid"
-    | "expired"
+  status: "building" | "proposals_ready" | "no_availability" | "paid" | "expired"
 ): Promise<void> {
   const pool = getPool();
   await pool.query(`UPDATE client_requests SET status = $2 WHERE id = $1`, [requestId, status]);
-}
-
-/**
- * Opens the provider-acceptance window: stamps when it closes and flips the
- * request to `awaiting_providers`. Called at the end of Phase 1.
- */
-export async function openProviderWindow(requestId: string, windowSeconds: number): Promise<void> {
-  const pool = getPool();
-  await pool.query(
-    `UPDATE client_requests
-     SET status = 'awaiting_providers',
-         provider_window_closes_at = now() + ($2 || ' seconds')::interval
-     WHERE id = $1`,
-    [requestId, windowSeconds]
-  );
-}
-
-/** Ids of requests whose acceptance window has closed and are ready to finalize. */
-export async function getRequestsPastWindow(limit = 20): Promise<string[]> {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT id FROM client_requests
-     WHERE status = 'awaiting_providers'
-       AND provider_window_closes_at IS NOT NULL
-       AND provider_window_closes_at <= now()
-     ORDER BY provider_window_closes_at
-     LIMIT $1`,
-    [limit]
-  );
-  return rows.map((r: any) => r.id);
-}
-
-/**
- * Atomically claims a request for finalization, returning true only for the
- * caller that won the race.
- *
- * Windows are closed lazily by whoever reads the request, and the status page
- * polls every few seconds, so several readers can arrive at the same due
- * request at once. Claiming pushes the window out instead of flipping a status
- * flag: overlapping readers see it as not-yet-due and skip it, and a finalize
- * that throws halfway simply becomes due again rather than stranding the
- * request in a state nothing sweeps.
- */
-export async function claimDueRequest(requestId: string): Promise<boolean> {
-  const pool = getPool();
-  const { rowCount } = await pool.query(
-    `UPDATE client_requests
-     SET provider_window_closes_at = now() + interval '2 minutes'
-     WHERE id = $1
-       AND status = 'awaiting_providers'
-       AND provider_window_closes_at IS NOT NULL
-       AND provider_window_closes_at <= now()`,
-    [requestId]
-  );
-  return (rowCount ?? 0) > 0;
 }
 
 // ─── Proposal cache (ephemeral hold) ──────────────────────────────────────

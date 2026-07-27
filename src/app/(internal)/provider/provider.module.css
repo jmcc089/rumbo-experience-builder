@@ -254,9 +254,6 @@
   box-shadow: var(--shadow-soft);
   transition: opacity 0.25s ease;
 }
-.cardAnswered {
-  opacity: 0.72;
-}
 .cardTop {
   display: flex;
   align-items: center;
@@ -269,43 +266,6 @@
   letter-spacing: 0.06em;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-.window {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--cobalt);
-  background: var(--pale);
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-variant-numeric: tabular-nums;
-}
-.windowDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--gold);
-  animation: pulse 1.6s ease-in-out infinite;
-}
-.windowUrgent {
-  color: #a23a2b;
-  background: #fbecea;
-}
-.windowClosed {
-  color: var(--muted);
-  background: var(--pale);
-  font-weight: 500;
-}
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
 }
 
 .detailGrid {
@@ -354,70 +314,6 @@
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
-.paySub {
-  font-size: 12px;
-  color: #4e7a63;
-}
-
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-}
-.confirmBtn,
-.declineBtn {
-  flex: 1;
-  padding: 11px 12px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.confirmBtn {
-  background: var(--positive);
-  color: #fff;
-}
-.confirmBtn:hover:not(:disabled) {
-  background: #196340;
-}
-.declineBtn {
-  background: #fff;
-  border-color: var(--pale-line);
-  color: var(--muted);
-}
-.declineBtn:hover:not(:disabled) {
-  border-color: #c2ccdb;
-  color: var(--navy);
-}
-.confirmBtn:disabled,
-.declineBtn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.resultBanner {
-  margin-top: auto;
-  text-align: center;
-  padding: 11px;
-  border-radius: var(--radius);
-  font-weight: 600;
-  font-size: 14px;
-}
-.resultConfirmed {
-  background: var(--positive-soft);
-  color: var(--positive);
-}
-.resultDeclined {
-  background: var(--pale);
-  color: var(--muted);
-}
-.resultError {
-  background: #fbecea;
-  color: #a23a2b;
-}
-
 /* Booked services */
 .bookedTag {
   font-size: 12px;

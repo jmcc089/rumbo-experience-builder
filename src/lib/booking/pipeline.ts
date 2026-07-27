@@ -23,21 +23,12 @@ import {
 } from "../llm";
 import {
   getRequestById,
-  getRequestByToken,
-  getRequestsPastWindow,
-  claimDueRequest,
   saveExtraction,
   saveProposals,
   setRequestStatus,
-  openProviderWindow,
 } from "./store";
-import {
-  insertPendingRequests,
-  getPendingForRequest,
-  getConfirmedExperienceIds,
-  resolveResponse,
-} from "../provider/store";
-import { PROVIDER_RESPONSE_WINDOW_SEC, PROVIDER_ACCEPT_RATE } from "../config";
+import { insertResolvedResponses, getConfirmedExperienceIds } from "../provider/store";
+import { PROVIDER_ACCEPT_RATE } from "../config";
 import { PipelineHooks } from "./types";
 import { sendProposalsReady } from "../email";
 
@@ -161,18 +152,24 @@ export function tripDates(arrivalDate: string, departureDate: string): string[] 
   return dates;
 }
 
-// ─── Phase 1: send availability requests to every matching provider ─────────
+// ─── The pipeline: match, resolve, assemble, all in one synchronous run ─────
 //
-// Runs synchronously right after intake (via `after()`), so it must be fast: it
-// only matches the catalog, records one PENDING availability request per
-// matched experience, and opens the acceptance window. Proposals are NOT built
-// here — that happens in finalizeProposals() once the window closes.
-export async function startAvailabilityRequests(requestId: string): Promise<void> {
+// Runs right after intake (via `after()`). There is no acceptance window: every
+// matched experience is resolved by the simulated responder immediately, and
+// proposals are assembled from the accepted set in the same call. The provider
+// portal's inbox is a read-only record of how each request resolved — a
+// provider was never going to be watching it in the ~2-3 seconds this takes,
+// so there is nothing for a human to actually accept or decline in practice.
+export async function runPipeline(
+  requestId: string,
+  hooks: PipelineHooks = {}
+): Promise<void> {
   const request = await getRequestById(requestId);
-  if (!request) throw new Error(`startAvailabilityRequests: request ${requestId} not found`);
+  if (!request) throw new Error(`runPipeline: request ${requestId} not found`);
 
   const prefs = request.prefs_json;
   const interests = selectedInterests(prefs);
+  const weights = deriveWeights(prefs);
 
   // LLM boundary: extract additive hard constraints + personalization notes
   // from free text. Fails safe to SAFE_DEFAULT_EXTRACTION on any LLM error.
@@ -185,68 +182,30 @@ export async function startAvailabilityRequests(requestId: string): Promise<void
   });
   await saveExtraction(requestId, extraction);
 
-  const { experiences: matched } = await matchFilter(
-    interests,
-    request.arrival_date,
-    request.departure_date,
-    request.budget_total
-  );
-
-  // One pending availability request per matched experience. NET rate (provider
-  // total) is stored — never a client price.
-  await insertPendingRequests(
-    matched.map((exp) => ({
-      requestId,
-      experienceId: exp.id,
-      providerId: exp.provider_id,
-      netRate: exp.net_price * request.travelers,
-    }))
-  );
-
-  await openProviderWindow(requestId, PROVIDER_RESPONSE_WINDOW_SEC);
-}
-
-// ─── Phase 2: window closed → resolve, then build proposals from acceptances ──
-//
-// Called for each request past its window, through the lazy closers below.
-// Idempotent: it only acts on requests still `awaiting_providers`.
-export async function finalizeProposals(
-  requestId: string,
-  hooks: PipelineHooks = {}
-): Promise<void> {
-  const request = await getRequestById(requestId);
-  if (!request) throw new Error(`finalizeProposals: request ${requestId} not found`);
-  if (request.status !== "awaiting_providers") return; // already finalized / not ready
-
-  // Resolve every still-pending request with a truly-random roll. Rows already
-  // decided by a human in the portal are left as-is (they aren't pending).
-  const pending = await getPendingForRequest(requestId);
-  for (const p of pending) {
-    const decision = Math.random() < PROVIDER_ACCEPT_RATE ? "confirmed" : "declined";
-    await resolveResponse({
-      requestId,
-      experienceId: p.experience_id,
-      providerId: p.provider_id,
-      decision,
-      netRate: p.net_rate,
-    });
-  }
-
-  const confirmedIds = new Set(await getConfirmedExperienceIds(requestId));
-
-  const prefs = request.prefs_json;
-  const interests = selectedInterests(prefs);
-  const weights = deriveWeights(prefs);
-
-  // Rebuild the catalog match and keep only experiences whose provider accepted.
   const { experiences: matched, lodging } = await matchFilter(
     interests,
     request.arrival_date,
     request.departure_date,
     request.budget_total
   );
-  const candidatePool = matched.filter((e) => confirmedIds.has(e.id)).map(toCandidate);
 
+  // Resolve every matched experience immediately with a truly-random roll, and
+  // record it. NET rate (provider total) is stored — never a client price.
+  const confirmedIds = new Set<string>();
+  const resolved = matched.map((exp) => {
+    const decision = Math.random() < PROVIDER_ACCEPT_RATE ? "confirmed" : "declined";
+    if (decision === "confirmed") confirmedIds.add(exp.id);
+    return {
+      requestId,
+      experienceId: exp.id,
+      providerId: exp.provider_id,
+      netRate: exp.net_price * request.travelers,
+      decision,
+    } as const;
+  });
+  await insertResolvedResponses(resolved);
+
+  const candidatePool = matched.filter((e) => confirmedIds.has(e.id)).map(toCandidate);
   const transferMatrix = await loadTransferMatrix();
 
   const problem: AssembleProblem = {
@@ -280,65 +239,4 @@ export async function finalizeProposals(
   // SBI-08 trigger (email 2): proposals are ready to pick + pay.
   await sendProposalsReady(request.email, request.token);
   await hooks.notifyProposalsReady?.({ requestId, token: request.token, email: request.email });
-}
-
-// ─── Closing the window without a scheduler ─────────────────────────────────
-//
-// $0 serverless has no always-on process to watch the clock, and an external
-// scheduler was tried and removed: GitHub Actions does not honour its own cron
-// cadence, so windows closed up to an hour late. Instead the window is closed
-// lazily, on read. Every surface that displays a request finalizes it first if
-// its window has passed, which means the client's own status page (already
-// polling every few seconds) is what closes the window in practice, within
-// seconds of it expiring.
-//
-// The trade is explicit: a request nobody ever looks at stays open. The
-// operator dashboard sweeps for exactly that case.
-
-/**
- * Finalizes one request if its acceptance window has closed. Safe to call on
- * every poll: it is a single indexed UPDATE when there is nothing to do, and
- * the claim keeps overlapping readers from finalizing the same request twice.
- * Never throws — a failed finalize must not break the page that triggered it.
- */
-export async function finalizeIfDue(requestId: string): Promise<void> {
-  try {
-    if (!(await claimDueRequest(requestId))) return;
-    await finalizeProposals(requestId);
-  } catch (err) {
-    console.error(`[finalizeIfDue] request ${requestId} failed:`, err);
-  }
-}
-
-/** Same, addressed by the client's public token. */
-export async function finalizeIfDueByToken(token: string): Promise<void> {
-  try {
-    const request = await getRequestByToken(token);
-    if (request) await finalizeIfDue(request.id);
-  } catch (err) {
-    console.error(`[finalizeIfDueByToken] token ${token} failed:`, err);
-  }
-}
-
-/**
- * Sweeps every request whose window has closed, so a client who never came back
- * still gets their proposals built and their "ready" email sent the next time
- * anyone opens the internal portal. Returns how many were finalized.
- */
-export async function finalizeDueRequests(): Promise<number> {
-  let done = 0;
-  try {
-    for (const id of await getRequestsPastWindow()) {
-      if (!(await claimDueRequest(id))) continue;
-      try {
-        await finalizeProposals(id);
-        done++;
-      } catch (err) {
-        console.error(`[finalizeDueRequests] request ${id} failed:`, err);
-      }
-    }
-  } catch (err) {
-    console.error("[finalizeDueRequests] sweep failed:", err);
-  }
-  return done;
 }

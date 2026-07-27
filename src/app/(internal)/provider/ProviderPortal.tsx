@@ -1,14 +1,12 @@
-"use client";
-
-import { useEffect, useState, useTransition } from "react";
-import { useRouter as useNavRouter } from "next/navigation";
-import type { AvailabilityRequest, BookedService, HistoryItem, ProviderInbox } from "@/lib/provider";
-import { respondToRequest } from "./actions";
+import type { BookedService, HistoryItem, ProviderInbox } from "@/lib/provider";
 import styles from "./provider.module.css";
 
 /**
- * Bookings body: the acting provider's inbox, paid jobs, and response history.
- * The "Viewing as" switcher now lives in the sidebar, so no context bar here.
+ * Bookings body: the acting provider's paid jobs and response history. There
+ * is no accept/decline inbox — every availability request is resolved by the
+ * simulated responder in the same pipeline run as the match, before a
+ * provider could ever see it, so history is the only thing to show. The
+ * "Viewing as" switcher lives in the sidebar, so no context bar here.
  */
 export default function BookingsView({
   inbox,
@@ -19,156 +17,15 @@ export default function BookingsView({
 }) {
   return (
     <>
-      <Inbox pending={inbox.pending} providerId={inbox.provider.id} />
-      <BookedServices bookings={bookings} providerId={inbox.provider.id} />
+      <BookedServices bookings={bookings} />
       <History history={inbox.history} />
     </>
   );
 }
 
-// ─── Inbox ────────────────────────────────────────────────────────────────
-
-function Inbox({ pending, providerId }: { pending: AvailabilityRequest[]; providerId: string }) {
-  return (
-    <section className={styles.section}>
-      <div className={styles.sectionHead}>
-        <h2 className={styles.sectionTitle}>Incoming requests</h2>
-        <span className={styles.count}>{pending.length}</span>
-      </div>
-      <p className={styles.sectionSub}>
-        Availability asks for trips still being planned, before the traveler pays. Accept the ones
-        you can host or decline them.
-      </p>
-
-      {pending.length === 0 ? (
-        <div className={styles.emptyCard}>
-          <p className={styles.emptyTitle}>No open requests right now</p>
-          <p className={styles.emptySub}>
-            New availability requests from Rumbo will appear here as travelers plan trips that
-            match your services.
-          </p>
-        </div>
-      ) : (
-        <div className={styles.cardGrid}>
-          {pending.map((req) => (
-            <RequestCard key={`${req.requestId}|${req.experienceId}`} req={req} providerId={providerId} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-type LocalStatus = "open" | "confirmed" | "declined" | "error";
-
-function RequestCard({ req, providerId }: { req: AvailabilityRequest; providerId: string }) {
-  const router = useNavRouter();
-  const [status, setStatus] = useState<LocalStatus>("open");
-  const [isPending, startTransition] = useTransition();
-  const remaining = useCountdown(req.windowExpiresAt);
-  const expired = remaining <= 0;
-
-  function respond(decision: "confirmed" | "declined") {
-    setStatus(decision);
-    startTransition(async () => {
-      const res = await respondToRequest(providerId, req.requestId, req.experienceId, decision);
-      if (!res.ok) {
-        setStatus("error");
-        return;
-      }
-      // Sync server state (moves this card into history on refresh).
-      router.refresh();
-    });
-  }
-
-  const answered = status === "confirmed" || status === "declined";
-
-  return (
-    <article className={`${styles.card} ${answered ? styles.cardAnswered : ""}`}>
-      <div className={styles.cardTop}>
-        <span className={styles.ticket}>{req.ticket}</span>
-        {expired && status === "open" ? (
-          <span className={`${styles.window} ${styles.windowClosed}`}>Window elapsed</span>
-        ) : status === "open" ? (
-          <span className={`${styles.window} ${remaining < 60_000 ? styles.windowUrgent : ""}`}>
-            <span className={styles.windowDot} aria-hidden />
-            Respond within {formatCountdown(remaining)}
-          </span>
-        ) : null}
-      </div>
-
-      <dl className={styles.detailGrid}>
-        <div className={styles.detail}>
-          <dt>Date</dt>
-          <dd>{formatDate(req.date)}</dd>
-        </div>
-        <div className={styles.detail}>
-          <dt>Time</dt>
-          <dd>{formatTime(req.time)}</dd>
-        </div>
-        <div className={styles.detail}>
-          <dt>People</dt>
-          <dd>
-            {req.travelers} {req.travelers === 1 ? "person" : "people"}
-          </dd>
-        </div>
-        <div className={`${styles.detail} ${styles.detailWide}`}>
-          <dt>Service requested</dt>
-          <dd>{req.serviceName}</dd>
-        </div>
-      </dl>
-
-      <div className={styles.payBlock}>
-        <span className={styles.payLabel}>You&rsquo;ll be paid</span>
-        <span className={styles.payAmount}>${req.netRateTotal.toLocaleString()}</span>
-        <span className={styles.paySub}>
-          ${req.netRatePerPerson} × {req.travelers} {req.travelers === 1 ? "person" : "people"}
-        </span>
-      </div>
-
-      {status === "open" && (
-        <div className={styles.actions}>
-          <button
-            className={styles.confirmBtn}
-            onClick={() => respond("confirmed")}
-            disabled={isPending}
-          >
-            Yes, we have space
-          </button>
-          <button
-            className={styles.declineBtn}
-            onClick={() => respond("declined")}
-            disabled={isPending}
-          >
-            Can&rsquo;t take it
-          </button>
-        </div>
-      )}
-
-      {status === "confirmed" && (
-        <div className={`${styles.resultBanner} ${styles.resultConfirmed}`}>Confirmed ✓</div>
-      )}
-      {status === "declined" && (
-        <div className={`${styles.resultBanner} ${styles.resultDeclined}`}>Declined</div>
-      )}
-      {status === "error" && (
-        <div className={`${styles.resultBanner} ${styles.resultError}`}>
-          Couldn&rsquo;t save — try again
-        </div>
-      )}
-    </article>
-  );
-}
-
 // ─── Booked services ──────────────────────────────────────────────────────────
 
-function BookedServices({
-  bookings,
-  providerId,
-}: {
-  bookings: BookedService[];
-  providerId: string;
-}) {
+function BookedServices({ bookings }: { bookings: BookedService[] }) {
   return (
     <section className={styles.section}>
       <div className={styles.sectionHead}>
@@ -275,27 +132,6 @@ function History({ history }: { history: HistoryItem[] }) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function useCountdown(targetIso: string): number {
-  const [remaining, setRemaining] = useState(() =>
-    Math.max(0, new Date(targetIso).getTime() - Date.now())
-  );
-  useEffect(() => {
-    const target = new Date(targetIso).getTime();
-    const tick = () => setRemaining(Math.max(0, target - Date.now()));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [targetIso]);
-  return remaining;
-}
-
-function formatCountdown(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 function formatDate(isoDate: string): string {
   const d = new Date(`${isoDate}T00:00:00Z`);

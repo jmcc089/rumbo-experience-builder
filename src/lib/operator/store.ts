@@ -59,7 +59,6 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 
 export type RequestStatus =
   | "building"
-  | "awaiting_providers"
   | "proposals_ready"
   | "no_availability"
   | "paid"

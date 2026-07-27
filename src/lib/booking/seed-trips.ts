@@ -9,7 +9,6 @@ import { ExperienceCategory, ClientPrefs } from "../types";
 import {
   createRequest,
   runRequestPipeline,
-  finalizeRequestProposals,
   getProposals,
   confirmAndPay,
 } from "./index";
@@ -149,8 +148,7 @@ async function main() {
     const { bookedAtISO, intake } = makeIntake();
     try {
       const { id: requestId, token } = await createRequest(intake);
-      await runRequestPipeline(requestId);        // Phase 1: pending availability requests
-      await finalizeRequestProposals(requestId);  // Phase 2: random 80% accept + assemble
+      await runRequestPipeline(requestId); // match, resolve, and assemble, all at once
 
       const { rows } = await pool.query(`SELECT status FROM client_requests WHERE id = $1`, [requestId]);
       if (rows[0].status !== "proposals_ready") {

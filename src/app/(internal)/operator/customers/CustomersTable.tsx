@@ -13,7 +13,6 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const STATUS_LABEL: Record<RequestStatus, string> = {
   building: "Building",
-  awaiting_providers: "Awaiting providers",
   proposals_ready: "Proposals sent",
   no_availability: "No availability",
   paid: "Paid",

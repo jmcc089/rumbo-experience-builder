@@ -79,7 +79,6 @@ export interface ProviderPersonalization {
 
 export type RequestStatus =
   | "building"
-  | "awaiting_providers" // request sent to providers; waiting on acceptances
   | "proposals_ready"
   | "no_availability" // window closed with too few acceptances to build a trip
   | "paid"

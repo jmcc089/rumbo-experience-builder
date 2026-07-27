@@ -14,20 +14,14 @@ import { MARKUP_RATE } from "./pricing";
  */
 export const MAX_TRIP_SPAN_DAYS = 10;
 
-// ─── Provider availability flow (request → accept → propose) ────────────────
+// ─── Provider availability flow ──────────────────────────────────────────────
 //
-// On submit, every matching provider/experience gets a *pending* availability
-// request. A short window later, still-pending requests are resolved by a
+// On submit, every matching provider/experience is resolved immediately by a
 // simulated responder (truly random, PROVIDER_ACCEPT_RATE chance to accept),
-// and proposals are assembled from the accepted experiences only. There is no
-// formal/informal distinction — all providers go through the same flow.
-//
-// The window is closed lazily, on read, not by a scheduler: any page that reads
-// the request finalizes it first if its window has passed. See
-// finalizeIfDue()/finalizeDueRequests() in the booking module.
-
-/** Seconds a client request waits for provider acceptances before finalizing. */
-export const PROVIDER_RESPONSE_WINDOW_SEC = 90;
+// and proposals are assembled from the accepted experiences only, in the same
+// pipeline run. There is no acceptance window and no waiting on a real
+// provider: the provider portal's inbox is a read-only record of how each
+// request resolved, not something a provider can act on.
 
 /** Probability (0–1) that a simulated provider accepts an availability request. */
 export const PROVIDER_ACCEPT_RATE = 0.8;

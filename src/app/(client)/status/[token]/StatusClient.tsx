@@ -9,7 +9,7 @@ import styles from "./status.module.css";
 type Status = RequestStatus | "not_found";
 
 /** Statuses where the request is still being worked and the page should poll. */
-const WAITING: Status[] = ["building", "awaiting_providers"];
+const WAITING: Status[] = ["building"];
 
 /**
  * Status page. Calm "we're building" state that polls the request status
@@ -53,9 +53,9 @@ export default function StatusClient({
             <span className={styles.eyebrow}>Building your experience</span>
             <h1 className={styles.title}>We’re shaping your itineraries</h1>
             <p className={styles.body}>
-              We’re contacting local providers to confirm availability and assembling three
-              complete itineraries around what you told us. We’ll email you the moment they’re ready,
-              usually within a couple of minutes. You can safely close this page.
+              We’re assembling three complete itineraries around what you told us. This usually
+              takes just a few seconds, and we’ll email you the moment they’re ready. You can
+              safely close this page.
             </p>
             <div className={styles.note}>No payment until you approve an itinerary.</div>
           </>

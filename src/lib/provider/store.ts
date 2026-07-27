@@ -172,44 +172,6 @@ export async function getProviderProfile(providerId: string): Promise<ProviderPr
   };
 }
 
-export interface ActiveRequestRow {
-  id: string;
-  arrival_date: string;
-  departure_date: string;
-  travelers: number;
-  budget_total: number;
-  interests: string[];
-  created_at: string;
-}
-
-/**
- * Client requests still being coordinated (building / proposals_ready). Only
- * the logistics the provider needs are read — the client's identity and price
- * are intentionally NOT selected here.
- */
-export async function getActiveRequests(): Promise<ActiveRequestRow[]> {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT id, arrival_date, departure_date, travelers, budget_total, prefs_json, created_at
-     FROM client_requests
-     WHERE status IN ('building', 'awaiting_providers', 'proposals_ready')
-     ORDER BY created_at DESC
-     LIMIT 40`
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    arrival_date: toDateString(r.arrival_date),
-    departure_date: toDateString(r.departure_date),
-    travelers: Number(r.travelers),
-    // budget_total is read only for the server-side match filter and is never
-    // returned past the lib layer.
-    budget_total: Number(r.budget_total),
-    interests: Array.isArray(r.prefs_json?.interests) ? r.prefs_json.interests : [],
-    created_at:
-      typeof r.created_at === "string" ? r.created_at : r.created_at.toISOString(),
-  }));
-}
-
 /**
  * Booked services this provider actually has to deliver: experience order_items
  * still 'booked' inside a PAID order. NET rate only (oi.net_price is the group
@@ -254,7 +216,7 @@ export async function getProviderBookedServices(providerId: string): Promise<Boo
   }));
 }
 
-export type ResponseStatus = "pending" | "confirmed" | "declined";
+export type ResponseStatus = "confirmed" | "declined";
 
 export interface ProviderResponseRow {
   request_id: string;
@@ -291,46 +253,37 @@ export async function getResponsesForProvider(providerId: string): Promise<Provi
 }
 
 /**
- * Phase 1: create one PENDING availability request per matched experience.
- * Batched into a single INSERT. Idempotent per (request, experience): re-running
- * leaves any already-recorded row untouched.
+ * Records one already-decided availability response per matched experience,
+ * batched into a single INSERT. The decision (confirmed/declined) is rolled by
+ * the simulated responder before this is called — there is no pending state:
+ * resolution happens in the same pipeline run as the match, not on a later
+ * response. Idempotent per (request, experience): re-running on retry leaves
+ * any already-recorded row untouched rather than re-rolling it.
  */
-export async function insertPendingRequests(
-  rows: Array<{ requestId: string; experienceId: string; providerId: string; netRate: number }>
+export async function insertResolvedResponses(
+  rows: Array<{
+    requestId: string;
+    experienceId: string;
+    providerId: string;
+    netRate: number;
+    decision: "confirmed" | "declined";
+  }>
 ): Promise<void> {
   if (rows.length === 0) return;
   const pool = getPool();
   const values: string[] = [];
   const params: unknown[] = [];
   rows.forEach((r, i) => {
-    const b = i * 4;
-    values.push(`($${b + 1}, $${b + 2}, $${b + 3}, 'pending', $${b + 4})`);
-    params.push(r.requestId, r.experienceId, r.providerId, r.netRate);
+    const b = i * 5;
+    values.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, now())`);
+    params.push(r.requestId, r.experienceId, r.providerId, r.decision, r.netRate);
   });
   await pool.query(
-    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, net_rate)
+    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, net_rate, decided_at)
      VALUES ${values.join(", ")}
      ON CONFLICT (request_id, experience_id) DO NOTHING`,
     params
   );
-}
-
-/** Phase 2: the availability requests still awaiting a response for a request. */
-export async function getPendingForRequest(
-  requestId: string
-): Promise<Array<{ experience_id: string; provider_id: string; net_rate: number }>> {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT experience_id, provider_id, net_rate
-     FROM provider_responses
-     WHERE request_id = $1 AND status = 'pending'`,
-    [requestId]
-  );
-  return rows.map((r: any) => ({
-    experience_id: r.experience_id,
-    provider_id: r.provider_id,
-    net_rate: Number(r.net_rate),
-  }));
 }
 
 /** Experience ids whose provider accepted, for building the candidate pool. */
@@ -342,28 +295,4 @@ export async function getConfirmedExperienceIds(requestId: string): Promise<stri
     [requestId]
   );
   return rows.map((r: any) => r.experience_id);
-}
-
-/**
- * Resolve a single availability request to confirmed/declined. Used both by the
- * simulated responder (Phase 2) and by a human accepting/declining in the
- * portal. The NET rate (provider total) is passed in — never a client price.
- */
-export async function resolveResponse(params: {
-  requestId: string;
-  experienceId: string;
-  providerId: string;
-  decision: "confirmed" | "declined";
-  netRate: number;
-}): Promise<void> {
-  const pool = getPool();
-  // Upsert so a manual portal decision still works even if no pending row exists.
-  await pool.query(
-    `INSERT INTO provider_responses (request_id, experience_id, provider_id, status, net_rate, decided_at)
-     VALUES ($1, $2, $3, $4, $5, now())
-     ON CONFLICT (request_id, experience_id)
-     DO UPDATE SET status = EXCLUDED.status,
-                   net_rate = EXCLUDED.net_rate, decided_at = now()`,
-    [params.requestId, params.experienceId, params.providerId, params.decision, params.netRate]
-  );
 }
