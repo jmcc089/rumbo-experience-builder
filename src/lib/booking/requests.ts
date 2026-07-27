@@ -5,14 +5,17 @@ import { generateProviderInstructions, OrderProviderInstructions } from "../llm"
 import {
   getProposalCache,
   getRequestByToken,
-  getRequestsPastWindow,
   insertClientRequest,
   insertOrder,
   markViewedIfFirst,
   NewOrderItem,
   setRequestStatus,
 } from "./store";
-import { startAvailabilityRequests, finalizeProposals } from "./pipeline";
+import {
+  startAvailabilityRequests,
+  finalizeProposals,
+  finalizeIfDueByToken,
+} from "./pipeline";
 import { sendAcknowledgment, sendPurchaseConfirmation, OrderSummary } from "../email";
 import {
   ConfirmAndPayResult,
@@ -37,7 +40,8 @@ export async function createRequest(intake: IntakeInput): Promise<CreateRequestR
 /**
  * Phase 1 (fires from intake via `after()`): match the catalog and send a
  * pending availability request to every matching provider, then open the
- * acceptance window. Proposals are built later by the cron finalizer.
+ * acceptance window. Proposals are built later, when the window is closed on
+ * read — see finalizeIfDue()/finalizeDueRequests() in ./pipeline.
  */
 export async function runRequestPipeline(requestId: string): Promise<void> {
   await startAvailabilityRequests(requestId);
@@ -51,13 +55,12 @@ export async function finalizeRequestProposals(
   await finalizeProposals(requestId, hooks);
 }
 
-/** Ids of requests whose acceptance window has closed (for the cron poller). */
-export async function getDueRequestIds(): Promise<string[]> {
-  return getRequestsPastWindow();
-}
-
 /** Retrieves the 3 proposals for a token. Starts the 15-min hold on first call. */
 export async function getProposals(token: string): Promise<ProposalsView> {
+  // The proposals link can be opened before the status page ever closed the
+  // window (straight from email 2, or on a fresh device), so close it here too.
+  await finalizeIfDueByToken(token);
+
   const cache = await getProposalCache(token);
   if (!cache) return { status: "not_found" };
 

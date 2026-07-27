@@ -18,6 +18,7 @@ import type {
   RequestStatus,
 } from "../types";
 import { getProposals } from "./requests";
+import { finalizeIfDueByToken } from "./pipeline";
 import { getRequestByToken } from "./store";
 
 /* ── View model ─────────────────────────────────────────────────────────── */
@@ -336,10 +337,17 @@ async function loadPaidItinerary(requestId: string, arrivalDate: string): Promis
   return proposal;
 }
 
-/** Lightweight status read that does NOT start the hold — for the status page poll. */
+/**
+ * Lightweight status read that does NOT start the hold — for the status page poll.
+ *
+ * This is also what closes the provider-acceptance window: the poll runs every
+ * few seconds while the client waits, so the window is finalized within seconds
+ * of expiring, with no scheduler involved.
+ */
 export async function getRequestStatus(
   token: string
 ): Promise<{ status: RequestStatus | "not_found" }> {
+  await finalizeIfDueByToken(token);
   const request = await getRequestByToken(token);
   if (!request) return { status: "not_found" };
   return { status: request.status };

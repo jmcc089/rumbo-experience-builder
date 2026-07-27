@@ -55,7 +55,7 @@ export default function StatusClient({
             <p className={styles.body}>
               We’re contacting local providers to confirm availability and assembling three
               complete itineraries around what you told us. We’ll email you the moment they’re ready,
-              usually within a few minutes. You can safely close this page.
+              usually within a couple of minutes. You can safely close this page.
             </p>
             <div className={styles.note}>No payment until you approve an itinerary.</div>
           </>

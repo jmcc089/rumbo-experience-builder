@@ -4,6 +4,7 @@ import {
   getProviderResponsePanel,
   type RequestStatus,
 } from "@/lib/operator";
+import { finalizeDueRequests } from "@/lib/booking";
 import styles from "./operator.module.css";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,11 @@ export const dynamic = "force-dynamic";
  * surface, separate from the client and provider routes.
  */
 export default async function OperatorPage() {
+  // Safety net for the lazy window closer: a client who never reopened their
+  // status page leaves an acceptance window hanging, so the operator's own
+  // dashboard sweeps any that are due before it reports on them.
+  await finalizeDueRequests();
+
   const [metrics, requests, providerPanel] = await Promise.all([
     getDashboardMetrics(),
     getRecentRequests(),

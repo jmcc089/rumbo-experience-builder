@@ -23,6 +23,9 @@ import {
 } from "../llm";
 import {
   getRequestById,
+  getRequestByToken,
+  getRequestsPastWindow,
+  claimDueRequest,
   saveExtraction,
   saveProposals,
   setRequestStatus,
@@ -34,7 +37,7 @@ import {
   getConfirmedExperienceIds,
   resolveResponse,
 } from "../provider/store";
-import { PROVIDER_RESPONSE_WINDOW_MIN, PROVIDER_ACCEPT_RATE } from "../config";
+import { PROVIDER_RESPONSE_WINDOW_SEC, PROVIDER_ACCEPT_RATE } from "../config";
 import { PipelineHooks } from "./types";
 import { sendProposalsReady } from "../email";
 
@@ -200,13 +203,13 @@ export async function startAvailabilityRequests(requestId: string): Promise<void
     }))
   );
 
-  await openProviderWindow(requestId, PROVIDER_RESPONSE_WINDOW_MIN);
+  await openProviderWindow(requestId, PROVIDER_RESPONSE_WINDOW_SEC);
 }
 
 // ─── Phase 2: window closed → resolve, then build proposals from acceptances ──
 //
-// Called by the cron poller for each request past its window. Idempotent: it
-// only acts on requests still `awaiting_providers`.
+// Called for each request past its window, through the lazy closers below.
+// Idempotent: it only acts on requests still `awaiting_providers`.
 export async function finalizeProposals(
   requestId: string,
   hooks: PipelineHooks = {}
@@ -277,4 +280,65 @@ export async function finalizeProposals(
   // SBI-08 trigger (email 2): proposals are ready to pick + pay.
   await sendProposalsReady(request.email, request.token);
   await hooks.notifyProposalsReady?.({ requestId, token: request.token, email: request.email });
+}
+
+// ─── Closing the window without a scheduler ─────────────────────────────────
+//
+// $0 serverless has no always-on process to watch the clock, and an external
+// scheduler was tried and removed: GitHub Actions does not honour its own cron
+// cadence, so windows closed up to an hour late. Instead the window is closed
+// lazily, on read. Every surface that displays a request finalizes it first if
+// its window has passed, which means the client's own status page (already
+// polling every few seconds) is what closes the window in practice, within
+// seconds of it expiring.
+//
+// The trade is explicit: a request nobody ever looks at stays open. The
+// operator dashboard sweeps for exactly that case.
+
+/**
+ * Finalizes one request if its acceptance window has closed. Safe to call on
+ * every poll: it is a single indexed UPDATE when there is nothing to do, and
+ * the claim keeps overlapping readers from finalizing the same request twice.
+ * Never throws — a failed finalize must not break the page that triggered it.
+ */
+export async function finalizeIfDue(requestId: string): Promise<void> {
+  try {
+    if (!(await claimDueRequest(requestId))) return;
+    await finalizeProposals(requestId);
+  } catch (err) {
+    console.error(`[finalizeIfDue] request ${requestId} failed:`, err);
+  }
+}
+
+/** Same, addressed by the client's public token. */
+export async function finalizeIfDueByToken(token: string): Promise<void> {
+  try {
+    const request = await getRequestByToken(token);
+    if (request) await finalizeIfDue(request.id);
+  } catch (err) {
+    console.error(`[finalizeIfDueByToken] token ${token} failed:`, err);
+  }
+}
+
+/**
+ * Sweeps every request whose window has closed, so a client who never came back
+ * still gets their proposals built and their "ready" email sent the next time
+ * anyone opens the internal portal. Returns how many were finalized.
+ */
+export async function finalizeDueRequests(): Promise<number> {
+  let done = 0;
+  try {
+    for (const id of await getRequestsPastWindow()) {
+      if (!(await claimDueRequest(id))) continue;
+      try {
+        await finalizeProposals(id);
+        done++;
+      } catch (err) {
+        console.error(`[finalizeDueRequests] request ${id} failed:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[finalizeDueRequests] sweep failed:", err);
+  }
+  return done;
 }

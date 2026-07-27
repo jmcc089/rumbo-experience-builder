@@ -81,15 +81,25 @@ CREATE TABLE IF NOT EXISTS client_requests (
   budget_total     numeric     NOT NULL,
   prefs_json       jsonb       NOT NULL DEFAULT '{}',
   free_text        text        NOT NULL DEFAULT '',
-  status           text        NOT NULL DEFAULT 'building',  -- 'building'|'proposals_ready'|'paid'|'expired'
+  status           text        NOT NULL DEFAULT 'building',  -- 'building'|'awaiting_providers'|'proposals_ready'|'no_availability'|'paid'|'expired'
   extraction_json  jsonb       NOT NULL DEFAULT '{}',  -- SBI-06 ExtractionOutput, persisted for reuse at pay time
+  -- When the provider-acceptance window closes. The window is closed lazily by
+  -- whichever page reads the request next, so this timestamp is the only clock
+  -- the flow has; there is no scheduler.
+  provider_window_closes_at timestamptz,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 
--- These two tables predate SBI-07; ALTER is needed since CREATE TABLE IF NOT
--- EXISTS above is a no-op on an already-existing table.
+-- These tables predate the SBI-07 / availability work; ALTER is needed since
+-- CREATE TABLE IF NOT EXISTS above is a no-op on an already-existing table.
 ALTER TABLE client_requests ADD COLUMN IF NOT EXISTS extraction_json jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE client_requests ADD COLUMN IF NOT EXISTS provider_window_closes_at timestamptz;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS provider_instructions_json jsonb NOT NULL DEFAULT '[]';
+
+-- Drives the lazy window closer's "what is due" lookup.
+CREATE INDEX IF NOT EXISTS idx_client_requests_window
+  ON client_requests (provider_window_closes_at)
+  WHERE status = 'awaiting_providers';
 
 -- Ephemeral proposal + hold cache (SBI-07). NOT a permanent booking: the 15-min
 -- hold only starts on first `getProposals` read (first_viewed_at); rows past
