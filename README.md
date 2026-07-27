@@ -15,7 +15,7 @@ A boutique inbound tour operator in El Salvador sells multi-day trips to US trav
 
 1. **Takes one intake.** Dates, party size, budget, preference dropdowns, and one free-text description.
 2. **Filters the catalog.** By category, operating days, and price with markup against the stated budget.
-3. **Opens an acceptance window.** Each matched experience asks its provider to accept or decline; any request left unanswered is settled at a flat rate when the ~10-minute window closes.
+3. **Opens an acceptance window.** Each matched experience asks its provider to accept or decline; any request left unanswered is settled at a flat rate when the 90-second window closes.
 4. **Validates that each day is actually possible.** Transfers between zones, operating hours, sunrise and tide dependencies, and no early starts when the traveler ruled them out.
 5. **Scores and assembles.** Five weighted metrics produce the top 3 deliberately distinct itineraries.
 6. **Emails a link to compare and book.** The hold starts when the client opens the link, not when it is sent.
@@ -43,7 +43,7 @@ That combination is real backend logic, and it has to be verifiable. Handing it 
 
 - One intake produces **3 complete, distinct, valid, scored** multi-day itineraries covering activities, transfers, meals, and lodging.
 - A coarse match filter over the catalog: category, operating days, and price with markup against the stated budget.
-- Per-request provider availability as a real acceptance window: each matched experience opens a request the provider can accept or decline from its portal, and any request left unanswered is settled by a simulated responder at a flat 80% accept rate once the ~10-minute window closes.
+- Per-request provider availability as a real acceptance window: each matched experience opens a request the provider can accept or decline from its portal, and any request left unanswered is settled by a simulated responder at a flat 80% accept rate once the 90-second window closes.
 - Temporal CSP validity: feasible transfers, operating hours, sunrise and tide dependencies, and no early starts when the traveler rules them out.
 - Weighted scoring across 5 metrics, with the top 3 selected under a distinctness guarantee.
 - A proposal hold that starts when the client **opens** the link, not when it is sent.
@@ -103,8 +103,11 @@ The operator's Cancel order removes the request and everything downstream of it 
 **ADR-14 · Transport is modeled as time, not as a bookable service.**
 `transfer_matrix` carries travel minutes between all 13 zones, and the engine uses it for feasibility and day-window fit. It has no cost, no provider, and no line in `order_items`. Transport time is what makes a day possible or impossible, and that is the constraint the engine exists to solve. Transport as a purchasable service is a separate business decision that would touch pricing, assembly, order items, and the client itinerary view without changing the scheduling logic at all. A complete version would add an intake field asking whether the traveler needs transport, routing to a full-service driver, a car rental provider, or nothing, and that runs into the same ownership gap as lodging in ADR-12, since no transport supplier exists as an entity. The lighter path, given that `transfer_matrix` already holds minutes per zone pair, is a flat or per-minute rate folded into the client price and shown as a line in the itinerary, with no provider confirming it.
 
-**ADR-15 · Provider availability is a two-phase flow with an acceptance window closed by a cron, not a synchronous roll.**
-When an intake arrives, phase one runs synchronously: the match filter selects candidate experiences and opens a real availability request for each, starting a roughly ten-minute acceptance window. No proposals are built yet. During the window, a provider can accept or decline from its portal inbox. Phase two runs once the window has closed: any request the provider did not answer is settled by a simulated responder that accepts at a flat 80% rate, and only then are proposals assembled from the accepted set, scored, and emailed. There is no always-on process in $0 serverless to watch the clock, so a GitHub Actions cron polls a finalize endpoint every five minutes and finalizes any request whose window has passed. A synchronous roll would have been simpler, but it turns the provider portal's accept and decline into decoration, since the trip would already be built before a provider could answer. Splitting the flow lets a real acceptance and a simulated one share exactly one finalize path.
+**ADR-15 · Provider availability is a two-phase flow with a real acceptance window, not a synchronous roll.**
+When an intake arrives, phase one runs synchronously: the match filter selects candidate experiences and opens a real availability request for each, starting a 90-second acceptance window. No proposals are built yet. During the window, a provider can accept or decline from its portal inbox. Phase two runs once the window has closed: any request the provider did not answer is settled by a simulated responder that accepts at a flat 80% rate, and only then are proposals assembled from the accepted set, scored, and emailed. A synchronous roll would have been simpler, but it turns the provider portal's accept and decline into decoration, since the trip would already be built before a provider could answer. Splitting the flow lets a real acceptance and a simulated one share exactly one finalize path.
+
+**ADR-16 · The acceptance window is closed on read, not by a scheduler.**
+Something has to notice that a window expired, and $0 serverless has no always-on process to watch the clock. A GitHub Actions cron was built first and then removed: GitHub does not honour its own schedule cadence, so runs landed roughly an hour apart instead of every five minutes, and the workflow had grown a 55-minute polling loop to paper over the gap. Windows still closed late, and a demo run took over ten minutes end to end. The window is now closed lazily instead. Every surface that reads a request finalizes it first if the window has passed, which means the client's own status page, already polling every few seconds while they wait, is what closes the window, within seconds of expiry and with no scheduler, no shared secret, and no external service. Concurrent readers are handled by an atomic claim that pushes the window out rather than flipping a status, so exactly one reader finalizes and a finalize that throws becomes due again instead of stranding the request. The honest cost is that a request nobody ever looks at stays open, which is why the operator dashboard sweeps for due requests before it reports on them. Submit to proposals is now about 99 seconds, measured end to end.
 
 ### Pipeline
 
@@ -112,10 +115,10 @@ When an intake arrives, phase one runs synchronously: the match filter selects c
 PHASE 1 — on intake (synchronous)
 1. Intake saved (status: building) ────────────────▶ Email 1 (acknowledgment)
 2. MATCH FILTER (catalog): category · open days · price-with-markup ≤ budget
-3. OPEN AVAILABILITY: one request per matched experience → a ~10-min acceptance window opens.
+3. OPEN AVAILABILITY: one request per matched experience → a 90-second acceptance window opens.
       During the window, providers accept or decline from their portal inbox.
 
-PHASE 2 — after the window closes (driven by a cron poller)
+PHASE 2 — after the window closes (triggered by the next read of the request)
 4. RESOLVE: any request left unanswered is settled by a simulated responder at a flat 80% accept
 5. CSP VALIDATION: feasible transfers · operating hours · sunrise/tide deps · no-early-mornings
 6. SCORING + ASSEMBLY: 5 weighted metrics → top-3 DISTINCT itineraries → apply markup
@@ -124,8 +127,9 @@ PHASE 2 — after the window closes (driven by a cron poller)
 8. Client opens link → 1-hour hold starts ON VIEW → picks one → simulated pay
 9. Order materialized to DB ───────────────────────▶ Email 3 (confirmation)
 
-Cron: GitHub Actions polls /api/cron/finalize every 5 minutes and finalizes any request
-whose acceptance window has closed. There is no always-on process in $0 serverless.
+No scheduler: the window is closed on read. Every page that displays a request finalizes it
+first if the window has passed, so the client's status page, already polling while they wait,
+is what closes it. The operator dashboard sweeps requests nobody came back to.
 ```
 
 **The engine:** `assemble(problem)` is the single entry point over the CSP and scoring core. It fills every day of a new trip and returns up to 3 valid, distinct (Jaccard similarity < 0.6), scored proposals.
@@ -184,7 +188,7 @@ These are not planned next steps. They mark where the demo's deliberate boundari
 | **Validation** | Zod | All external data, including every LLM response |
 | **AI** | DeepSeek `deepseek-v4-flash` | Narrow, fenced role: free-text constraints and personalization notes |
 | **Email** | Resend | 3 transactional emails: acknowledgment, proposals-ready, confirmation |
-| **Scheduling** | GitHub Actions cron | Polls the finalize endpoint every 5 minutes to close acceptance windows (Phase 2) |
+| **Scheduling** | None, closed on read | Any page that reads a request closes its acceptance window first (Phase 2) |
 | **Deploy** | Vercel | Serverless; GitHub-first, then Vercel connected to the repo |
 
 ### Request Flow
@@ -198,11 +202,11 @@ createRequest()          → insert client_requests (status: building) → Email
 runRequestPipeline()     → PHASE 1, synchronous:
    matchFilter()             catalog: category · open-days · price-with-markup ≤ budget
    startAvailabilityRequests() open one provider request per matched experience,
-                               start the ~10-minute acceptance window
+                               start the 90-second acceptance window
    ▼
 (providers accept or decline from their portal inbox during the window)
    ▼
-GitHub Actions cron  ──▶  POST /api/cron/finalize  (Bearer CRON_SECRET)
+Any read of the request  ──▶  finalizeIfDue()  (status poll · proposals page · operator sweep)
    getDueRequestIds()    → requests whose window has closed
    finalizeProposals()   → PHASE 2:
       resolve()             unanswered requests settled at a flat 80% accept rate
@@ -234,7 +238,6 @@ project/src/
     │   ├── page.tsx       landing + photo hero + 3-step intake
     │   ├── proposals/     3-proposal comparison + simulated payment
     │   └── status/        status polling (poll, not WebSockets)
-    ├── api/cron/finalize/ Phase 2 poller (GitHub Actions + CRON_SECRET)
     └── (internal)/
         ├── operator/      dashboard · Orders · Providers (inline catalog editing)
         └── provider/      3-section portal: Bookings · Services · Information
@@ -242,7 +245,7 @@ project/src/
 
 ### Configuration and fail-safe behavior
 
-The system degrades instead of breaking when a dependency is missing. With no DeepSeek key the LLM falls back to deterministic defaults, so free-text extraction and personalization simply return safe values and nothing that decides feasibility or price is affected. With no Resend key every email becomes a logged no-op, so the pipeline runs end to end without sending. `DATABASE_URL` is the only hard requirement, and the schema lives in `schema.sql` while the catalog itself lives in the Neon database. Phase 2 finalization is authenticated with `CRON_SECRET`, so only the scheduled poller can close acceptance windows.
+The system degrades instead of breaking when a dependency is missing. With no DeepSeek key the LLM falls back to deterministic defaults, so free-text extraction and personalization simply return safe values and nothing that decides feasibility or price is affected. With no Resend key every email becomes a logged no-op, so the pipeline runs end to end without sending. `DATABASE_URL` is the only hard requirement, and the schema lives in `schema.sql` while the catalog itself lives in the Neon database. Phase 2 needs no credential of its own, because nothing external triggers it: the window is closed by whichever page reads the request next.
 
 ---
 
@@ -254,7 +257,7 @@ The system degrades instead of breaking when a dependency is missing. With no De
 | **LLM role** | Narrow, Zod-fenced, fail-safe | Deterministic code owns validity, pricing, and availability; the LLM can never leak into feasibility or money |
 | **Determinism** | Deterministic engine, seeded hashing, no `Math.random()` | The same request and accepted set reproduce the same itineraries; the only randomness is the deliberate provider-acceptance simulation |
 | **Pricing** | Single `applyMarkup()`, net and client partitioned | Providers never see the client price and clients never see net, an architectural invariant |
-| **Availability** | Two-phase: a real acceptance window closed by a cron | A genuine accept or decline in the provider portal, not a synchronous roll; unanswered requests settle at a flat 80% |
+| **Availability** | Two-phase: a real acceptance window closed on read | A genuine accept or decline in the provider portal, not a synchronous roll; unanswered requests settle at a flat 80% |
 | **Proposals** | Top 3 with Jaccard similarity < 0.6 | Three genuinely different options, not three near-duplicates |
 | **Provider portal** | Self-service, a switcher instead of a login, net-rate-only | Providers own and edit their catalog, prices, and profile, with every write scoped server-side |
-| **Async** | Cron poller plus email, no WebSockets | Fits $0 serverless: a GitHub Actions cron closes acceptance windows and triggers the proposals email |
+| **Async** | Lazy close plus email, no WebSockets | Fits $0 serverless with nothing always-on: the reader that finds an expired window closes it and triggers the proposals email |
