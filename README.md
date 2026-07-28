@@ -1,15 +1,22 @@
-# Rumbo: An Itinerary Engine for tours in El Salvador
+# Rumbo: An Itinerary Engine for Tours in El Salvador
 
-> Rumbo turns one client request (dates, party, budget, and a free-text description) into 3 complete, distinct, valid, optimized multi-day itineraries (activities, transfers, meals, lodging) through a temporal constraint-satisfaction and weighted-scoring engine written in application code, not an LLM prompt. The LLM is fenced to a narrow role: deterministic code has final say on validity, pricing, and availability.
-
-**Live app:** https://rumbo-experience-builder.vercel.app
-**Operator dashboard:** https://rumbo-experience-builder.vercel.app/operator
-**Provider portal:** https://rumbo-experience-builder.vercel.app/provider
-**Walkthrough (slides):** https://rumbo-brief.netlify.app
+> Source: Notion — https://app.notion.com/p/39cf9cdba74581a49a8deda7d50d4378
+> Public case study — https://mauriciocruz.notion.site/Rumbo-An-Itinerary-Engine-for-tours-in-El-Salvador-39cf9cdba74581a49a8deda7d50d4378
+> Markdown mirror of the Notion case study.
 
 ---
 
-## What Rumbo Does
+> Rumbo turns one client request (dates, party, budget, and a free-text description) into 3 complete, distinct, valid, optimized multi-day itineraries (activities, transfers, meals, lodging) through a temporal constraint-satisfaction and weighted-scoring engine written in application code, not an LLM prompt. The LLM is fenced to a narrow role: deterministic code has final say on validity, pricing, and availability.
+
+---
+
+## 1. Interactive Brief
+
+https://rumbo-brief.netlify.app/
+
+---
+
+## 2. What Rumbo Does
 
 A boutique inbound tour operator in El Salvador sells multi-day trips to US travelers. Rumbo is that operator's internal coordination system: one client request goes in, and three complete, bookable multi-day itineraries come out, each one validated day by day and priced on a markup the client never sees itemized.
 
@@ -21,15 +28,20 @@ A boutique inbound tour operator in El Salvador sells multi-day trips to US trav
 6. **Emails a link to compare and book.** The hold starts when the client opens the link, not when it is sent.
 7. **Materializes the order on payment.** Simulated payment, confirmation email, and provider instructions generated.
 
-### Three portals
+### The three portals
 
-- **Client** — the public landing page and the three-step intake that starts everything: dates, party size, budget, preference dropdowns, and one free-text description of the trip they picture. → https://rumbo-experience-builder.vercel.app
-- **Operator** — Rumbo's own view: margin on every order, incoming requests and their status, and the full provider catalog with inline editing. → https://rumbo-experience-builder.vercel.app/operator
-- **Provider** — what a local business sees: its booked jobs and the history of how its requests resolved, plus its own services, prices, and profile to manage. It only ever sees its net rate, never the client price. Use "Viewing as" at the bottom of the sidebar to switch between businesses. → https://rumbo-experience-builder.vercel.app/provider
+**Client** — the public landing page and the three-step intake that starts everything: dates, party size, budget, preference dropdowns, and one free-text description of the trip they picture.
+URL: https://rumbo-experience-builder.vercel.app
+
+**Operator** — Rumbo's own view: margin on every order, incoming requests and their status, and the full provider catalog with inline editing. "Orders" shows real bookings with their margin.
+URL: https://rumbo-experience-builder.vercel.app/operator
+
+**Providers** — what a local business sees: its booked jobs and the history of how its requests resolved, its own services and prices, and its own profile. It only ever sees its net rate, never the client price. A "Viewing as" switcher at the bottom of the sidebar changes which business you are.
+URL: https://rumbo-experience-builder.vercel.app/provider
 
 ---
 
-## System Design
+## 3. System Design
 
 Assembling a multi-day trip is not a CRUD problem. It is temporal constraint satisfaction plus optimization. Each day is a continuous bounded window. Each activity consumes real time and has to be chained by feasible transfers between zones. Some activities only run at sunrise or depend on the tide. Providers have operating hours, capacity, and their own confirmation behavior. Lodging anchors every night.
 
@@ -37,12 +49,12 @@ Feasibility is only half of it. An itinerary also has to be **good**: paced corr
 
 That combination is real backend logic, and it has to be verifiable. Handing it to a language model would make it unverifiable. So the engine is deterministic code, and the LLM is fenced away from anything that decides feasibility or money. Everything below follows from that one commitment.
 
-### Requirements
+### 3.1 Requirements
 
-**Functional**
+#### Functional
 
 - One intake produces **3 complete, distinct, valid, scored** multi-day itineraries covering activities, transfers, meals, and lodging.
-- A coarse match filter over the catalog: category, operating days, and price with markup against the stated budget.
+- A coarse match filter over the static catalog: category, operating days, and price with markup against the stated budget.
 - Per-request provider availability resolved synchronously: every matched experience is settled by a simulated responder at a flat 80% accept rate, and the provider portal keeps a read-only record of how each request resolved.
 - Temporal CSP validity: feasible transfers, operating hours, sunrise and tide dependencies, and no early starts when the traveler rules them out.
 - Weighted scoring across 5 metrics, with the top 3 selected under a distinctness guarantee.
@@ -50,7 +62,7 @@ That combination is real backend logic, and it has to be verifiable. Handing it 
 - Simulated payment, order materialization, and a confirmation email.
 - An operator dashboard with margin per order, inline catalog editing, and order cancellation.
 
-**Non-functional and hard rules**
+#### Non-functional and hard rules
 
 - **Deterministic engine.** Given the same request and the same set of accepted providers, the assembly and scoring engine always produces the same itineraries, using seeded hashing and no `Math.random()`. The only deliberate randomness is the simulated provider acceptance, which lives outside the engine (see ADR-6).
 - **LLM-fenced.** Nothing the LLM returns can touch validity, pricing, availability, or scoring weights. Every response is Zod-validated and fails safe to deterministic defaults.
@@ -59,7 +71,7 @@ That combination is real backend logic, and it has to be verifiable. Handing it 
 - **$0 hosting.** One Next.js app on Vercel Hobby plus the Neon free tier. Async is poll and email, no WebSockets.
 - **No scalability by design.** A business-modeling and technical-demonstration exercise, not built to scale.
 
-### Architecture Decisions (ADRs)
+### 3.2 Architecture Decisions (ADRs)
 
 **ADR-1 · The core is a temporal CSP and weighted-scoring engine in application code, not a prompt.**
 The whole point of the build is provably correct backend logic, and validity and pricing have to be deterministic and testable rather than probabilistic. That rules out a language model deciding any of it. The cost is far more engine code than an LLM wrapper would need, which is precisely the demonstration.
@@ -106,9 +118,9 @@ The operator's Cancel order removes the request and everything downstream of it 
 **ADR-15 · Provider availability is resolved synchronously, in the same run as the match.**
 One pipeline run matches the catalog, settles every matched experience through a simulated responder that accepts at a flat 80% rate, and assembles proposals from the accepted set. Submit to proposals takes one to two seconds, measured end to end. An acceptance window was built first, on the premise that a provider would answer in real time from a portal inbox, and that premise does not survive contact with the timings: nobody is watching an inbox during the couple of seconds a request takes to resolve, so accept and decline were decorative buttons and the window bought nothing but latency. Removing it also removes everything that existed only to close it. The provider portal keeps "Recent history" as a read-only record of how each request resolved. The honest cost is that acceptance is now entirely simulated, with no path for a real one: reaching a provider for a genuine answer needs a channel they already watch, such as a mobile app with push notifications, which is a different mechanism from a web inbox and a countdown.
 
-### Pipeline
+### 3.3 Pipeline
 
-```text
+```
 ON INTAKE — one synchronous run, fired via after()
 1. Intake saved (status: building) ────────────────▶ Email 1 (acknowledgment)
 2. MATCH FILTER (catalog): category · open days · price-with-markup ≤ budget
@@ -128,20 +140,20 @@ seconds end to end. The client's status page polls only to notice that it alread
 
 **Scoring:** five metrics normalized to 0 through 1 and combined by a weight vector that sums to 1: *transfer efficiency, interest match, pace, breathing room, variety.* The weights are derived deterministically from the client's dropdowns, starting from one of four profiles (Relaxed, Explorer, Focused, Comfortable) and then nudged and renormalized. The LLM never touches them.
 
-### Data Model
+### 3.4 Data Model
 
 Eleven tables, split into a catalog and a transactional set.
 
 | Group | Tables | Role |
-|---|---|---|
-| **Catalog** | `zones`, `transfer_matrix`, `providers`, `experiences`, `lodging`, `provider_personalization` | The world: zones and zone-level travel times, providers (reliability and popularity signals), experiences (hours, duration, net price per person, capacity, dependency), lodging tiers, and provider capability answers |
+| --- | --- | --- |
+| **Catalog** | `zones`, `transfer_matrix`, `providers`, `experiences`, `lodging`, `provider_personalization` | The world: zones and zone-level travel times, providers (formal or informal, reliability, popularity), experiences (hours, duration, net price per person, capacity, dependency), lodging tiers, and provider capability answers |
 | **Request** | `client_requests`, `proposal_cache` | The intake, with preferences and the persisted LLM extraction, plus the ephemeral 3-proposal hold that starts on first view and is never a booking |
 | **Order** | `orders`, `order_items` | Written only on a completed purchase. `order_items` carries one row per booked experience and lodging night at its net price, which is what the operator's margin is derived from |
 | **Provider** | `provider_responses` | How each matched experience resolved, confirmed or declined, holding `net_rate` only and never the client price |
 
 The catalog is seeded, but it is not read-only. The provider portal writes to `experiences`, `providers`, and `provider_personalization` when a business edits its own services, prices, or profile, and the operator writes to the same tables through inline catalog editing. Every one of those writes is scoped server-side to the provider that owns the row.
 
-### Scope
+### 3.5 Scope
 
 A portfolio build: the smallest system that proves the pattern end to end, not a production deployment at scale.
 
@@ -155,9 +167,7 @@ A portfolio build: the smallest system that proves the pattern end to end, not a
 - **Authentication.** The portals are open demonstration surfaces (see the hard rules and ADR-11).
 - **Scalability, concurrency, and high availability** (see ADR-10).
 
-**What production would require**
-
-These are not planned next steps. They mark where the demo's deliberate boundaries sit and what crossing each one would actually cost, which is the difference between a portfolio build and a product.
+**What production would require.** These are not planned next steps. They mark where the demo's deliberate boundaries sit and what crossing each one would actually cost, which is the difference between a portfolio build and a product.
 
 - A production catalog would be sourced from real providers, not seeded.
 - Provider communication would be a real mobile app with push notifications in place of the simulated availability step, while keeping the confirmation itself structured.
@@ -168,12 +178,14 @@ These are not planned next steps. They mark where the demo's deliberate boundari
 
 ---
 
-## Build Evidence
+## 4. Build Evidence
 
-### The Stack
+GitHub: https://github.com/jmcc089/rumbo-experience-builder
+
+### 4.1 The Stack
 
 | Layer | Tool | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | **Language / runtime** | Node.js + TypeScript (strict) | The whole system: engine, portals, services |
 | **Framework** | Next.js (App Router) | Three portals plus Server Actions as the RPC surface |
 | **Database** | Neon (Postgres, free tier) | Catalog and transactional tables |
@@ -183,9 +195,9 @@ These are not planned next steps. They mark where the demo's deliberate boundari
 | **Scheduling** | None | Nothing is deferred: the whole pipeline runs in the call that fires from intake |
 | **Deploy** | Vercel | Serverless; GitHub-first, then Vercel connected to the repo |
 
-### Request Flow
+### 4.2 Request Flow
 
-```text
+```
 Client fills intake (name, email, dates, party, budget, prefs, free text)
    │  Server Action: submitIntake()
    ▼
@@ -204,9 +216,9 @@ getProposals(token)      → 1-hour hold starts on FIRST view (idempotent)
 confirmAndPay()          → insert orders + order_items (txn) → Email 3
 ```
 
-### Project Structure
+### 4.3 Project Structure
 
-```text
+```
 project/src/
 ├── lib/
 │   ├── db/            schema.sql · migrate.ts · shared Neon pool
@@ -229,16 +241,16 @@ project/src/
         └── provider/      3-section portal: Bookings · Services · Information
 ```
 
-### Configuration and fail-safe behavior
+### 4.4 Configuration and fail-safe behavior
 
 The system degrades instead of breaking when a dependency is missing. With no DeepSeek key the LLM falls back to deterministic defaults, so free-text extraction and personalization simply return safe values and nothing that decides feasibility or price is affected. With no Resend key every email becomes a logged no-op, so the pipeline runs end to end without sending. `DATABASE_URL` is the only hard requirement, and the schema lives in `schema.sql` while the catalog itself lives in the Neon database. Nothing external triggers the pipeline, so there is no scheduler credential and no shared secret to hold: the whole run happens inside the request that created it.
 
 ---
 
-## Key Engineering Choices
+## 5. Key Engineering Choices
 
 | Decision | What was chosen | Why |
-|---|---|---|
+| --- | --- | --- |
 | **Core logic** | Temporal CSP and weighted scoring in application code | Provably correct backend logic, the whole point, not an LLM wrapper |
 | **LLM role** | Narrow, Zod-fenced, fail-safe | Deterministic code owns validity, pricing, and availability; the LLM can never leak into feasibility or money |
 | **Determinism** | Deterministic engine, seeded hashing, no `Math.random()` | The same request and accepted set reproduce the same itineraries; the only randomness is the deliberate provider-acceptance simulation |
@@ -247,3 +259,14 @@ The system degrades instead of breaking when a dependency is missing. With no De
 | **Proposals** | Top 3 with Jaccard similarity < 0.6 | Three genuinely different options, not three near-duplicates |
 | **Provider portal** | Self-service, a switcher instead of a login, net-rate-only | Providers own and edit their catalog, prices, and profile, with every write scoped server-side |
 | **Async** | One synchronous run plus email, no WebSockets | Fits $0 serverless with nothing always-on: there is nothing to wait for, so the status page only polls to notice the run already finished |
+
+---
+
+## Links
+
+- Notion case study: https://mauriciocruz.notion.site/Rumbo-An-Itinerary-Engine-for-tours-in-El-Salvador-39cf9cdba74581a49a8deda7d50d4378
+- Walkthrough (slides): https://rumbo-brief.netlify.app
+- Live app (client): https://rumbo-experience-builder.vercel.app
+- Operator dashboard: https://rumbo-experience-builder.vercel.app/operator
+- Provider portal: https://rumbo-experience-builder.vercel.app/provider
+- GitHub: https://github.com/jmcc089/rumbo-experience-builder
